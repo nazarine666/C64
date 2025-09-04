@@ -1,0 +1,1170 @@
+MarkMultiplexorBeginCode = *
+
+Multiplex_spriteHeightTweak = VIC2SpriteSizeY+2 ; Add 2 because the carry is clear when we do "sbc VIC2Raster" and we want to start updating the sprite data on the next line after the sprite bottom.
+
+!ifdef Multiplexor_UseMulticolour {
+  eMultiplexor_UseMulticolour = 2
+} else {
+  eMultiplexor_UseMulticolour = 0
+}
+
+!ifdef Multiplexor_UsePriority {
+  eMultiplexor_UsePriority = 2
+} else {
+  eMultiplexor_UsePriority = 0
+}
+
+!ifdef Multiplexor_UseDoubleWidth {
+  eMultiplexor_UseDoubleWidth = 4
+} else {
+  eMultiplexor_UseDoubleWidth = 0
+}
+
+!ifdef Multiplexor_UseDoubleHeight {
+  eMultiplexor_UseDoubleHeight = 4
+} else {
+  eMultiplexor_UseDoubleHeight = 0
+}
+
+!ifdef Multiplex_rasterHeight { } else {
+!ifdef Multiplex_MaintainPriority {
+Multiplex_rasterHeight = 5
+} else {
+Multiplex_rasterHeight = 3
+}
+}
+
+!ifdef Multiplex_TopRasterHeight { } else {
+!ifdef eMultiplex_ExtraIRQHeightTweak { } else {
+  eMultiplex_ExtraIRQHeightTweak = 0
+}
+!ifdef Multiplex_LogCollisions {
+  eMultiplex_LogCollisions = 1
+} else {
+  eMultiplex_LogCollisions = 0
+}
+!ifdef Multiplex_MaintainPriority {
+  eMultiplex_MaintainPriority = 9
+} else {
+  eMultiplex_MaintainPriority = 0
+}
+!ifdef Multiplexor_UseShiftedYPos {
+!if Multiplexor_UseShiftedYPos = 1 {
+  eAdjust_Multiplexor_UseShiftedYPos = 2
+}
+!if Multiplexor_UseShiftedYPos = 2 {
+  eAdjust_Multiplexor_UseShiftedYPos = 4
+}
+} else {
+eAdjust_Multiplexor_UseShiftedYPos = 0
+}
+Multiplex_TopRasterHeight = 8 + eMultiplex_LogCollisions + eMultiplex_MaintainPriority + eAdjust_Multiplexor_UseShiftedYPos + eMultiplex_ExtraIRQHeightTweak + eMultiplexor_UseMulticolour + eMultiplexor_UsePriority + eMultiplexor_UseDoubleWidth + eMultiplexor_UseDoubleHeight
+}
+
+!ifdef Multiplex_TopSpriteBeforeRasterPadding { } else {
+Multiplex_TopSpriteBeforeRasterPadding = 2 + ((eMultiplex_LogCollisions + eMultiplex_MaintainPriority + eAdjust_Multiplexor_UseShiftedYPos + eMultiplex_ExtraIRQHeightTweak + eMultiplexor_UseMulticolour + eMultiplexor_UsePriority + eMultiplexor_UseDoubleWidth + eMultiplexor_UseDoubleHeight) / 4)
+}
+
+!ifndef Multiplex_DiscardSpritesYPosForSort {
+Multiplex_DiscardSpritesYPosForSort = Multiplex_DiscardSpritesYPos
+}
+
+
+!macro MACROMultiplex_SpriteStrip ~.Multiplex_LBLISFP9 , .spriteIndex {
+!ifdef Multiplex_ReverseOrder {
+.spriteIndexReal = 7 - .spriteIndex
+} else {
+.spriteIndexReal = .spriteIndex
+}
+;--------------------------------------
+; MPi: Calculate with this current raster position and the bottom of the last sprite Y pos
+; Is it better to start a new raster IRQ at the new position or shall we update the sprite now?
+!ifdef Multiplex_MaintainPriority {
+  cpy #0
+  beq .noReset
+
+  ; Find out the difference between the last and this current sprite position
+  ldx Multiplex_indextable,y
+  lda Multiplex_YPos,x
+  sbc Multiplex_LastGoodSpriteYPosUsed
+!ifdef Multiplexor_UseDoubleHeight {
+  cmp Multiplex_DynamicSpriteHeight2
+} else {
+  cmp #(VIC2SpriteSizeY+Multiplex_TopRasterHeight)+1
+}
+  bcc .noReset
+
+  ; If there is a gap larger than than this then reset the priority used to ensure consistent sprite sorting
+  lda Multiplex_LastGoodSpriteYPosUsed
+!ifdef Multiplexor_UseDoubleHeight {
+  adc Multiplex_DynamicSpriteHeight
+} else {
+  adc #VIC2SpriteSizeY
+}
+  ; Suitable safety margin
+  cmp VIC2Raster
+  bcc .otherCheck
+
+  sta VIC2Raster
+  lda #<Multiplex_intNextSpr0Reset
+  sta Multiplex_IRQServiceRoutineLo
+  lda #>Multiplex_intNextSpr0Reset
+  sta Multiplex_IRQServiceRoutineHi
+  jmp .currentIRQEnd
+
+.noReset
+}
+.otherCheck
+!ifdef Multiplex_MaintainPriority {
+  ; Do the raster check only if the sprite has been updated at least once this frame
+  lda #(1<<.spriteIndexReal)
+  bit VIC2SpriteEnable
+  beq .blit0
+}
+
+  lda VIC2Sprite0Y + (.spriteIndexReal * 2)
+  ; Carry happens to be always clear at this point due to the code logic
+!ifdef Multiplexor_UseDoubleHeight {
+  adc Multiplex_DynamicSpriteHeight3
+} else {
+  adc #Multiplex_spriteHeightTweak
+}
+  sbc VIC2Raster
+  bcc .blit0    ; MPi: Process the sprite now not later since we have finished the bottom of the previous sprite using this slot
+  cmp #Multiplex_rasterHeight
+  bcs .next0    ; MPi: If we want to trigger a raster make sure it isn't closer than Multiplex_rasterHeight scan lines from our current position
+
+  lda #Multiplex_rasterHeight
+.next0  clc     ; MPi: Process the sprite later next raster IRQ
+  adc VIC2Raster
+
+!ifdef Multiplex_OverflowRasterCheck2 {
+!ifdef Multiplex_DiscardSpritesYPosUseLocation {
+  cmp Multiplex_DiscardSpritesYPosLocation2
+} else {
+  cmp #Multiplex_DiscardSpritesYPos-Multiplex_rasterHeight-1          ; Overflow interrupt check
+}
+!ifdef Multiplex_OverflowRasterCheck2LongBranch {
+  +lbcs .intExitInter0
+} else {
+  bcs .intExitInter0
+}
+}
+
+  sta VIC2Raster
+
+  lda #<.Multiplex_inter0
+  sta Multiplex_IRQServiceRoutineLo
+  lda #>.Multiplex_inter0
+  sta Multiplex_IRQServiceRoutineHi
+.currentIRQEnd
+  sty Multiplex_counter
+  +MACROAckRasterIRQ_A
+
+
+!ifdef Multiplexor_DebugBorder {
+  lda #VIC2Colour_Cyan : sta VIC2BorderColour
+}
+  lda Multiplex_areg
+  ldx Multiplex_xreg
+  ldy Multiplex_yreg
+  +Multiplex_IRQExit
+
+; MPi: Each Multiplex_interX is entered by each subsequent raster IRQ
+.Multiplex_inter0
+!if .spriteIndex = 0 {
+Multiplex_intNextSpr0Reset = *
+}
+  ; 8 cycles from the end of the left border
+  sta Multiplex_areg    ; 3
+  stx Multiplex_xreg    ; 6
+  sty Multiplex_yreg    ; 9
+
+  ldy Multiplex_counter ; 12
+
+!ifdef Multiplex_LogCollisions {
+  lda VIC2SpriteSpriteCollision
+!ifdef Multiplex_LogCollisionsBackground {
+  ora VIC2SpriteBackgroundCollision
+}
+  beq .noCol
+!ifdef Multiplexor_UpdateCollisionDetailsSoftEnable {
+  bit Multiplexor_UpdateCollisionDetailsSoftEnableFlag
+  beq .noCol
+}
+  jsr Multiplexor_UpdateCollisionDetailsNoCheck
+.noCol
+}
+; MPi: Each .blitX can also entered by a raster IRQ processing more than one sprite in this band if it is calculated it is better to follow on rather than create a new raster IRQ.
+.blit0  ldx Multiplex_indextable,y  ; 16
+
+!ifdef Multiplexor_DebugBorder {
+  inc VIC2BorderColour
+}
+
+  lda Multiplex_YPos,x  ; 20
+
+  ; If early out is disabled then we have to do the check in the IRQ instead. With it enabled
+  ; then the extra time in the mainline means time saved in this IRQ.
+!ifdef Multiplex_EnableEarlyOut { } else {
+!ifdef Multiplex_DiscardSpritesYPosUseLocation {
+  cmp Multiplex_DiscardSpritesYPosLocation
+} else {
+  cmp #Multiplex_DiscardSpritesYPos ; 22          ; Don't display any sprites once this is reached
+}
+  bcs .intExitInter0    ; 24
+}
+
+  ; If the sprite y position is already less than the raster then we skip it.
+  ; This indicates we have more sprites on a row than we can handle and saves a tiny bit of time.
+  ; This time saved can be used to potentially display more sprites later on instead.
+!ifdef Multiplex_BunchingCheck {
+  sec
+  sbc #Multiplex_TopSpriteBeforeRasterPadding
+  cmp VIC2Raster      ; 28
+!ifdef Multiplex_BunchingCheckLongBranch {
+  +lbcc .skipSprite     ; 30
+} else {
+  bcc .skipSprite     ; 30
+}
+; inc VIC2BorderColour  ; Debugging to indicate when a sprite is discarded
+  lda Multiplex_YPos,x
+}
+!ifdef Multiplex_LogCollisions {
+  ; Store what sprite is using what index for the collision to use
+  stx Multiplex_CollisionHistory + .spriteIndexReal
+}
+
+  sta VIC2Sprite0Y + (.spriteIndexReal * 2)
+
+!ifdef Multiplex_MaintainPriority {
+  sta Multiplex_LastGoodSpriteYPosUsed
+}
+
+  lda Multiplex_XPosLo,x
+  sta VIC2Sprite0X + (.spriteIndexReal * 2)
+
+  lda Multiplex_SpriteFrame,x
+  .Multiplex_LBLISFP9 = *
+  sta Multiplex_spritepointer + .spriteIndexReal
+
+  lda Multiplex_Colour,x
+  sta VIC2Sprite0Colour + .spriteIndexReal
+
+!ifdef Multiplex_MaintainPriority {
+  lda #(1<<.spriteIndexReal)
+  ora VIC2SpriteEnable
+  sta VIC2SpriteEnable
+}
+
+!ifdef Multiplexor_UseMulticolour {
+  lda Multiplex_Multicolour,x
+  beq .nomc0
+  lda #(1 << .spriteIndexReal)
+  ora VIC2SpriteMulticolour
+  bne .yesmc0
+.nomc0  lda #$ff - (1 << .spriteIndexReal)
+  and VIC2SpriteMulticolour
+.yesmc0 sta VIC2SpriteMulticolour
+}
+
+!ifdef Multiplexor_UsePriority {
+  lda Multiplex_Priority,x
+  beq .nopr0
+  lda #(1 << .spriteIndexReal)
+  ora VIC2SpritePriority
+  bne .yespr0
+.nopr0  lda #$ff - (1 << .spriteIndexReal)
+  and VIC2SpritePriority
+.yespr0 sta VIC2SpritePriority
+}
+
+!ifdef Multiplexor_UseDoubleWidth {
+  lda Multiplex_DoubleWidth,x
+  beq .nodw0
+  lda #(1 << .spriteIndexReal)
+  ora VIC2SpriteDoubleWidth
+  bne .yesdw0
+.nodw0  lda #$ff - (1 << .spriteIndexReal)
+  and VIC2SpriteDoubleWidth
+.yesdw0 sta VIC2SpriteDoubleWidth
+}
+
+!ifdef Multiplexor_UseDoubleHeight {
+  lda Multiplex_DoubleHeight,x
+  beq .nodh0
+  jsr Multiplex_SetDoubleSpriteHeight
+  lda #(1 << .spriteIndexReal)
+  ora VIC2SpriteDoubleHeight
+  bne .yesdh0
+.nodh0  lda #$ff - (1 << .spriteIndexReal)
+  and VIC2SpriteDoubleHeight
+.yesdh0 sta VIC2SpriteDoubleHeight
+  bne .someValueSet
+  jsr Multiplex_SetNormalSpriteHeight
+.someValueSet
+}
+
+  lda Multiplex_XPosHi,x
+  beq .no0
+  lda #(1 << .spriteIndexReal)
+  ora VIC2SpriteXMSB
+  bne .yes0
+.no0  lda #$ff - (1 << .spriteIndexReal)
+  and VIC2SpriteXMSB
+.yes0 sta VIC2SpriteXMSB
+
+.skipSprite
+  iny
+
+!ifdef Multiplex_OverflowRasterCheck1 {
+  lda VIC2Raster
+!ifdef Multiplex_DiscardSpritesYPosUseLocation {
+  cmp Multiplex_DiscardSpritesYPosLocation2
+} else {
+  cmp #Multiplex_DiscardSpritesYPos-Multiplex_rasterHeight-1          ; Overflow interrupt check
+}
+  bcs .intExitInter0
+}
+  cpy Multiplex_MaxSprSorted
+  bcc .Multiplex_nextSpriteFunction
+.intExitInter0  jmp Multiplex_exitinter
+.Multiplex_nextSpriteFunction
+}
+
+!macro MACROMultiplex_SpriteChunk ~.Multiplex_LBLISFP1 , .spriteIndex {
+!ifdef Multiplex_ReverseOrder {
+.spriteIndexReal = 7 - .spriteIndex;
+} else {
+.spriteIndexReal = .spriteIndex;
+}
+  ldx Multiplex_indextable + .spriteIndex
+  ldy Multiplex_YPos,x
+!ifdef Multiplex_LogCollisions {
+  ; Store what sprite is using what index for the collision to use
+  stx Multiplex_CollisionHistory + .spriteIndexReal
+}
+  sty VIC2Sprite0Y + (.spriteIndexReal * 2)
+  ldy Multiplex_XPosLo,x
+  sty VIC2Sprite0X + (.spriteIndexReal * 2)
+  ldy Multiplex_SpriteFrame,x
+
+  .Multiplex_LBLISFP1 = *
+  sty Multiplex_spritepointer + .spriteIndexReal
+
+  ldy Multiplex_Colour,x
+  sty VIC2Sprite0Colour + .spriteIndexReal
+
+!ifdef Multiplexor_UseMulticolour {
+  ldy Multiplex_Multicolour,x
+  beq .nomc0
+  pha
+  lda VIC2SpriteMulticolour
+  ora #(1 << .spriteIndexReal)
+  sta VIC2SpriteMulticolour
+  pla
+.nomc0
+}
+!ifdef Multiplexor_UsePriority {
+  ldy Multiplex_Priority,x
+  beq .nopr0
+  pha
+  lda VIC2SpritePriority
+  ora #(1 << .spriteIndexReal)
+  sta VIC2SpritePriority
+  pla
+.nopr0
+}
+!ifdef Multiplexor_UseDoubleWidth {
+  ldy Multiplex_DoubleWidth,x
+  beq .nodw0
+  pha
+  lda VIC2SpriteDoubleWidth
+  ora #(1 << .spriteIndexReal)
+  sta VIC2SpriteDoubleWidth
+  pla
+.nodw0
+}
+!ifdef Multiplexor_UseDoubleHeight {
+  ldy Multiplex_DoubleHeight,x
+  beq .nodh0
+  pha
+  lda VIC2SpriteDoubleHeight
+  ora #(1 << .spriteIndexReal)
+  sta VIC2SpriteDoubleHeight
+  pla
+.nodh0
+}
+
+  ; Must be the last instruction because the returned status is used
+  ldy Multiplex_XPosHi,x
+}
+
+!macro MACROMultiplex_SortBlock .index , .backPos , ~.forward {
+.over1  ldy MultiplexSort_indextable+.index+1
+.back1  ldx MultiplexSort_indextable+.index
+.forward = .back1
+  lda+2 MultiplexSort_YPos,y
+  cmp MultiplexSort_YPos,x
+  bcs .over2
+  stx MultiplexSort_indextable+.index+1
+  sty MultiplexSort_indextable+.index
+  bcc .backPos
+.over2
+}
+
+;--------------------------------------
+!zn {
+!ifdef Multiplex_MaintainPriority {
+Multiplex_LastGoodSpriteYPosUsed !by 0
+}
+; The main top interrupt that draws the first line of sprites and then figures out what next to plot
+Multiplex_maininter
+  sta Multiplex_areg
+  stx Multiplex_xreg
+  sty Multiplex_yreg
+
+Multiplex_maininterEx
+!ifdef Multiplexor_DebugBorder {
+  inc VIC2BorderColour
+}
+
+!ifdef Multiplex_MaintainPriority {
+  lda #$00
+  sta VIC2SpriteXMSB
+}
+
+!ifdef Multiplex_LogCollisions {
+  ; Reset the counter for this frame
+  lda #$00
+  sta Multiplex_CollisionCounter
+
+  ; Deliberately use an invalid index so we don't log old collisions more than once.
+  lda #$ff
+  sta Multiplex_CollisionHistory
+  sta Multiplex_CollisionHistory+1
+  sta Multiplex_CollisionHistory+2
+  sta Multiplex_CollisionHistory+3
+  sta Multiplex_CollisionHistory+4
+  sta Multiplex_CollisionHistory+5
+  sta Multiplex_CollisionHistory+6
+  sta Multiplex_CollisionHistory+7
+}
+
+
+!ifdef Multiplexor_UseMulticolour {
+  lda #0
+  sta VIC2SpriteMulticolour
+}
+!ifdef Multiplexor_UsePriority {
+  lda #0
+  sta VIC2SpritePriority
+}
+!ifdef Multiplexor_UseDoubleWidth {
+  lda #0
+  sta VIC2SpriteDoubleWidth
+}
+!ifdef Multiplexor_UseDoubleHeight {
+  lda #0
+  sta VIC2SpriteDoubleHeight
+  jsr Multiplex_SetNormalSpriteHeight
+}
+
+
+!ifdef Multiplex_MaintainPriority { } else {
+  ldy Multiplex_MaxSprSorted
+  cpy #$09
+  bcs .morethan8
+
+  lda .activatetab,y
+  sta VIC2SpriteEnable
+
+  lda #$4c              ; Set jmp $xxxx
+  sta .switch
+
+  lda .jumplo,y
+  sta Multiplex_jumplo
+  lda .jumphi,y
+  sta Multiplex_jumphi
+
+  ; A=0 is used by the chosen jump table routine
+  lda #0
+  jmp+2 (Multiplex_jumplo)
+
+.morethan8  lda #$ff
+  sta VIC2SpriteEnable
+}
+
+
+!ifdef Multiplex_MaintainPriority {
+
+  ldy #0
+  sty Multiplex_counter
+  sty VIC2SpriteEnable
+
+  ldx Multiplex_indextable
+  lda Multiplex_YPos,x
+  sta Multiplex_LastGoodSpriteYPosUsed
+
+} else {
+
+  lda #$08
+  sta Multiplex_counter
+
+  ; Self modifying code setup
+  lda #$2c              ; Set bit $xxxx
+  sta .switch
+
+  ; Init the sprite control registers
+  lda #0
+
+
+;--------------------------------------
+.dospr7
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP1 , 7
+  beq .dospr6
+!ifdef Multiplex_ReverseOrder {
+  lda #$01
+} else {
+  lda #$80
+}
+.dospr6
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP2 , 6
+  beq .dospr5
+!ifdef Multiplex_ReverseOrder {
+  ora #$02
+} else {
+  ora #$40
+}
+.dospr5
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP3 , 5
+  beq .dospr4
+!ifdef Multiplex_ReverseOrder {
+  ora #$04
+} else {
+  ora #$20
+}
+.dospr4
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP4 , 4
+  beq .dospr3
+!ifdef Multiplex_ReverseOrder {
+  ora #$08
+} else {
+  ora #$10
+}
+.dospr3
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP5 , 3
+  beq .dospr2
+!ifdef Multiplex_ReverseOrder {
+  ora #$10
+} else {
+  ora #$08
+}
+.dospr2
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP6 , 2
+  beq .dospr1
+!ifdef Multiplex_ReverseOrder {
+  ora #$20
+} else {
+  ora #$04
+}
+.dospr1
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP7 , 1
+  beq .dospr0
+!ifdef Multiplex_ReverseOrder {
+  ora #$40
+} else {
+  ora #$02
+}
+.dospr0
+  +MACROMultiplex_SpriteChunk ~Multiplex_ISFP8 , 0
+  beq .over
+!ifdef Multiplex_ReverseOrder {
+  ora #$80
+} else {
+  ora #$01
+}
+.over sta VIC2SpriteXMSB
+};< !Multiplex_MaintainPriority
+
+!ifdef Multiplexor_UseDoubleHeight {
+  lda VIC2SpriteDoubleHeight
+  beq .nothingSet
+  jsr Multiplex_SetDoubleSpriteHeight
+.nothingSet
+}
+
+
+!ifdef Multiplex_LogCollisions {
+  ; Now "ACK" any pre-existing collisions from the last frame
+  lda VIC2SpriteSpriteCollision
+!ifdef Multiplex_LogCollisionsBackground {
+  lda VIC2SpriteBackgroundCollision
+}
+}
+!ifdef Multiplexor_DebugBorder {
+  inc VIC2BorderColour
+}
+
+!ifdef Multiplex_EnableHookAfterTopSpritesUpdate {
+  jsr Multiplex_HookAfterTopSpritesUpdate
+}
+
+!ifdef Multiplex_MaintainPriority { } else {
+.switch jmp Multiplex_exitinter     ; Self modifying for jmp or bit
+}
+
+  clc
+
+  ; MPi: During heavy use (>24 sprites) on average the interrupt updates at least two new sprites and quite often three or four sprites. (Enable Multiplexor_DebugBorder to see this.)
+  ; Armed with this information there is an average time saving by having reg y maintain Multiplex_counter and being able to do
+  ; "ldx Multiplex_indextable,y" instead of "lda Multiplex_indextable,x : tax" even taking into account the extra interrupt x register store and restore.
+  ; This is because the "ldy Multiplex_counter : iny : sty Multiplex_counter" doesn't always need to be done every sprite and can be optimised to be just "iny".
+  ; However Under light use (<16 sprites) the average interrupt updates one sprites but the extra overhead for the extra interrupt x store and restore is small compared to the savings mentioned above.
+  ; Basically the theory being optimise for heavy use since heavy use is where the optimisation is more appreciated.
+
+  ldy Multiplex_counter
+
+
+  ; MPi: From here until the Multiplex_exitinter the sprite plotting code has been reworked to use an extra register (x) and include the optimisations described above.
+Multiplex_intNextSpr0
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP9 , 0
+Multiplex_intNextSpr1
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP10 , 1
+Multiplex_intNextSpr2
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP11 , 2
+Multiplex_intNextSpr3
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP12 , 3
+Multiplex_intNextSpr4
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP13 , 4
+Multiplex_intNextSpr5
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP14 , 5
+Multiplex_intNextSpr6
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP15 , 6
+Multiplex_intNextSpr7
+  +MACROMultiplex_SpriteStrip ~Multiplex_ISFP16 , 7
+  jmp Multiplex_intNextSpr0
+
+!ifdef Multiplex_MaintainPriority { } else {
+.jumplo !by <Multiplex_exitinter,<.dospr0,<.dospr1,<.dospr2
+  !by <.dospr3,<.dospr4,<.dospr5,<.dospr6
+  !by <.dospr7
+
+.jumphi !by >Multiplex_exitinter,>.dospr0,>.dospr1,>.dospr2
+  !by >.dospr3,>.dospr4,>.dospr5,>.dospr6
+  !by >.dospr7
+}
+
+!ifdef Multiplex_ReverseOrder {
+.activatetab  !by $00,$80,$c0,$e0,$f0,$f8,$fc,$fe,$ff
+} else {
+.activatetab  !by $00,$01,$03,$07,$0f,$1f,$3f,$7f,$ff
+}
+
+!ifdef Multiplex_LogCollisions {
+
+!macro MACROMultiplex_RegisterCollision .colTemp , .spriteIndex {
+  lsr .colTemp
+  bcc .noCollisionThisChunk
+  lda Multiplex_CollisionHistory+.spriteIndex
+  bmi .noCollisionThisChunk
+  sta Multiplex_CollisionIndexes,x
+  ; Don't store this sprite again until it is updated
+  lda #$ff
+  sta Multiplex_CollisionHistory+.spriteIndex
+  inx
+.noCollisionThisChunk
+}
+
+
+!ifdef Multiplexor_UpdateCollisionDetailsSoftEnable {
+; This software flag can be 0 or $ff. If it is 0 then even if the sprite register shows collisions
+; they will not be logged and thus save a little bit of rater time.
+; Useful if the collision is switched on but it needs to be switched off to display tighter packed
+; sprite formations during an animated scene that doesn't need collision.
+Multiplexor_UpdateCollisionDetailsSoftEnableFlag !by $ff
+}
+Multiplexor_UpdateCollisionDetails
+  cmp #0  ; Just in case the previous insruction was not lda VIC2SpriteSpriteCollision;
+  bne .gotCollision
+.retCol
+  rts
+.gotCollision
+!ifdef Multiplexor_UpdateCollisionDetailsSoftEnable {
+  bit Multiplexor_UpdateCollisionDetailsSoftEnableFlag
+  beq .retCol
+}
+Multiplexor_UpdateCollisionDetailsNoCheck
+  sta .colTemp
+!ifdef Multiplexor_DebugBorderCollision {
+  inc VIC2BorderColour
+}
+; stx .colRegTemp
+  ldx Multiplex_CollisionCounter
+  ; Now process all collision flagged sprites
+  ; Unrolled the loop instead of using indrect X
+  +MACROMultiplex_RegisterCollision .colTemp , 0
+  bne .furtherCollision1
+  jmp .noFurtherCollision
+.furtherCollision1
+  +MACROMultiplex_RegisterCollision .colTemp , 1
+  bne .furtherCollision2
+  jmp .noFurtherCollision
+.furtherCollision2
+  +MACROMultiplex_RegisterCollision .colTemp , 2
+  beq .noFurtherCollision
+  +MACROMultiplex_RegisterCollision .colTemp , 3
+  beq .noFurtherCollision
+  +MACROMultiplex_RegisterCollision .colTemp , 4
+  beq .noFurtherCollision
+  +MACROMultiplex_RegisterCollision .colTemp , 5
+  beq .noFurtherCollision
+  +MACROMultiplex_RegisterCollision .colTemp , 6
+  beq .noFurtherCollision
+  +MACROMultiplex_RegisterCollision .colTemp , 7
+
+.noFurtherCollision
+  stx Multiplex_CollisionCounter
+; ldx .colRegTemp
+!ifdef Multiplexor_DebugBorderCollision {
+  dec VIC2BorderColour
+}
+.noCollision1
+  rts
+.colTemp !by 0
+;.colRegTemp !by 0
+}
+}
+
+;--------------------------------------
+!zn {
+; The last interrupt that displays sprites gets to this exit routine.
+Multiplex_exitinter
+!ifdef Multiplexor_DebugBorder {
+  inc VIC2BorderColour
+}
+  inc Multiplex_BottomTriggered
+!ifdef MultiplexExt_LastIRQ {
+  jmp MultiplexExt_LastIRQ
+} else {
+!ifdef Multiplex_EnableEarlyOut { } else {
+!ifdef Multiplex_LogCollisions {
+  ; Automatically update this if the Multiplex_EnableEarlyOut is not defined since the IRQ will
+  ; be after the last sprite.
+  lda VIC2SpriteSpriteCollision
+!ifdef Multiplex_LogCollisionsBackground {
+  ora VIC2SpriteBackgroundCollision
+}
+  beq .noCol
+!ifdef Multiplexor_UpdateCollisionDetailsSoftEnable {
+  bit Multiplexor_UpdateCollisionDetailsSoftEnableFlag
+  beq .noCol
+}
+  jsr Multiplexor_UpdateCollisionDetailsNoCheck
+.noCol
+} ;< !ifdef Multiplex_LogCollisions {
+} ;< !ifdef Multiplex_EnableEarlyOut { } else {
+
+  jsr Multiplex_Sort
+  jsr Multiplex_StartTopInterrupt
+  jmp Multiplex_AckExitInterrupt
+} ;< MultiplexExt_LastIRQ {
+} ;< !zn {
+
+;--------------------------------------
+!zn {
+Multiplex_AckExitInterrupt
+  +MACROAckRasterIRQ_A
+
+!ifdef Multiplexor_DebugBorder {
+  lda #VIC2Colour_Cyan : sta VIC2BorderColour
+}
+
+  lda Multiplex_areg
+  ldx Multiplex_xreg
+  ldy Multiplex_yreg
+  +Multiplex_IRQExit
+}
+
+!zn {
+Multiplex_StartTopInterrupt
+  ; Start the main interrupt back at the top of the screen again
+  lda #<Multiplex_maininter
+  sta Multiplex_IRQServiceRoutineLo
+  lda #>Multiplex_maininter
+  sta Multiplex_IRQServiceRoutineHi
+
+  ; MPi: First raster at the top of the first sprite minus a small amount of raster time to allow the first lot of sprites to be displayed
+  ldx Multiplex_indextable
+  lda Multiplex_YPos,x
+  sec
+  sbc #Multiplex_TopRasterHeight
+  bcs .storeRaster
+  lda #0    ; MPi: Don't go up beyond the top line
+.storeRaster
+!ifdef Multiplex_TopScreenIRQRaster {
+  cmp #Multiplex_TopScreenIRQRaster
+  bcs .isOK
+  lda #Multiplex_TopScreenIRQRaster
+.isOK
+}
+  sta VIC2Raster
+  rts
+}
+
+;--------------------------------------
+!zn {
+Multiplex_InitSort  
+  ldx Multiplex_MaxSpr
+  stx MultiplexSort_MaxSprSorted
+  dex
+.1  txa
+  sta MultiplexSort_indextable,x
+  dex
+  bpl .1
+
+  lda #<sortstart
+  sta Multiplex_bal
+  lda #>sortstart
+  sta Multiplex_bah
+
+  ldy #$00
+.2  lda Multiplex_bal
+  sta Multiplex_Sortlo,y
+  lda Multiplex_bah
+  sta Multiplex_Sorthi,y
+
+  lda Multiplex_bal
+  clc
+  adc #MACROMultiplex_SortBlockByteLength
+  sta Multiplex_bal
+  bcc .over
+  inc Multiplex_bah
+.over iny
+  cpy #Multiplex_items-1
+  bne .2
+  rts
+}
+
+; When using Multiplex_SortRelocate then the user must define Multiplex_Sort and ensure Multiplex_Sort_Real is called
+!ifdef Multiplex_SortRelocate {
+  Multiplex_SortRelocate_Start = *
+  * = Multiplex_SortRelocate
+}
+
+;--------------------------------------
+!zn {
+!ifdef Multiplexor_UseShiftedYPos {
+MultiplexSort_YPosShifted !fill Multiplex_items , 0
+}
+Multiplex_Sort_Real
+  lda Multiplex_MaxSpr
+Multiplex_SortStore
+!ifndef Multiplex_SplitSort {
+  sta Multiplex_MaxSpr
+}
+  sta MultiplexSort_MaxSprSorted
+  cmp #$02
+  bcc .exit
+  sbc #$02
+  tax
+  lda Multiplex_Sortlo,x
+  sta Multiplex_bal
+  lda Multiplex_Sorthi,x
+  sta Multiplex_bah
+
+!ifdef Multiplexor_UseShiftedYPos {
+!if Multiplexor_UseShiftedYPos > 0 {
+  ldx MultiplexSort_MaxSprSorted
+  dex
+.sl1
+  lda MultiplexSort_YPos,x
+!if Multiplexor_UseShiftedYPos = 1 {
+  lsr
+}
+!if Multiplexor_UseShiftedYPos = 2 {
+  lsr
+  lsr
+}
+  sta MultiplexSort_YPosShifted,x
+  dex
+  bpl .sl1
+}
+}
+
+  ; Self modifying code that puts an RTS ($60) into the sort routine below depending on how many sprites it wants to process in the index table.
+  ldy #$00
+  lda (Multiplex_bal),y
+  sta .smbackup+1
+  lda #$60  ; (rts)
+  sta (Multiplex_bal),y
+  jsr .over0
+  ldy #$00
+.smbackup lda #$ff
+  sta (Multiplex_bal),y
+
+!ifdef Multiplex_EnableEarlyOut {
+  ldy #0
+.l1
+  ldx MultiplexSort_indextable,y
+  lda MultiplexSort_YPos,x
+!ifdef Multiplex_DiscardSpritesYPosUseLocation {
+  cmp Multiplex_DiscardSpritesYPosForSortLocation
+} else {
+  cmp #Multiplex_DiscardSpritesYPosForSort          ; Don't display any sprites once this is reached
+}
+  bcs .l2
+  iny
+  cpy Multiplex_MaxSpr
+  bcc .l1
+.l2
+  sty MultiplexSort_MaxSprSorted
+}
+
+.exit rts
+
+.over0  ldy MultiplexSort_indextable+1
+.back0  ldx MultiplexSort_indextable
+!ifdef Multiplexor_UseShiftedYPos {
+  lda MultiplexSort_YPosShifted,y
+  cmp MultiplexSort_YPosShifted,x
+} else {
+  lda+2 MultiplexSort_YPos,y
+  cmp MultiplexSort_YPos,x
+}
+  bcs .over1
+  stx MultiplexSort_indextable+1
+  sty MultiplexSort_indextable
+
+sortstart
+.over1
+  +MACROMultiplex_SortBlock   1 , .back0  , ~.back1
+.over2
+MACROMultiplex_SortBlockByteLength = .over2 - .over1
+  +MACROMultiplex_SortBlock   2 , .back1  , ~.back2
+  +MACROMultiplex_SortBlock   3 , .back2  , ~.back3
+  +MACROMultiplex_SortBlock   4 , .back3  , ~.back4
+  +MACROMultiplex_SortBlock   5 , .back4  , ~.back5
+  +MACROMultiplex_SortBlock   6 , .back5  , ~.back6
+  +MACROMultiplex_SortBlock   7 , .back6  , ~.back7
+  +MACROMultiplex_SortBlock   8 , .back7  , ~.back8
+  +MACROMultiplex_SortBlock   9 , .back8  , ~.back9
+  +MACROMultiplex_SortBlock  10 , .back9  , ~.back10
+  +MACROMultiplex_SortBlock  11 , .back10 , ~.back11
+  +MACROMultiplex_SortBlock  12 , .back11 , ~.back12
+  +MACROMultiplex_SortBlock  13 , .back12 , ~.back13
+  +MACROMultiplex_SortBlock  14 , .back13 , ~.back14
+  +MACROMultiplex_SortBlock  15 , .back14 , ~.back15
+  +MACROMultiplex_SortBlock  16 , .back15 , ~.back16
+  +MACROMultiplex_SortBlock  17 , .back16 , ~.back17
+  +MACROMultiplex_SortBlock  18 , .back17 , ~.back18
+  +MACROMultiplex_SortBlock  19 , .back18 , ~.back19
+  +MACROMultiplex_SortBlock  20 , .back19 , ~.back20
+  +MACROMultiplex_SortBlock  21 , .back20 , ~.back21
+  +MACROMultiplex_SortBlock  22 , .back21 , ~.back22
+!if Multiplex_items > 24 {
+  +MACROMultiplex_SortBlock  23 , .back22 , ~.back23
+  +MACROMultiplex_SortBlock  24 , .back23 , ~.back24
+  +MACROMultiplex_SortBlock  25 , .back24 , ~.back25
+  +MACROMultiplex_SortBlock  26 , .back25 , ~.back26
+  +MACROMultiplex_SortBlock  27 , .back26 , ~.back27
+  +MACROMultiplex_SortBlock  28 , .back27 , ~.back28
+  +MACROMultiplex_SortBlock  29 , .back28 , ~.back29
+  +MACROMultiplex_SortBlock  30 , .back29 , ~.back30
+}
+!if Multiplex_items > 32 {
+  +MACROMultiplex_SortBlock  31 , .back30 , ~.back31
+  +MACROMultiplex_SortBlock  32 , .back31 , ~.back32
+  +MACROMultiplex_SortBlock  33 , .back32 , ~.back33
+  +MACROMultiplex_SortBlock  34 , .back33 , ~.back34
+  +MACROMultiplex_SortBlock  35 , .back34 , ~.back35
+  +MACROMultiplex_SortBlock  36 , .back35 , ~.back36
+  +MACROMultiplex_SortBlock  37 , .back36 , ~.back37
+  +MACROMultiplex_SortBlock  38 , .back37 , ~.back38
+}
+!if Multiplex_items > 40 {
+  +MACROMultiplex_SortBlock  39 , .back38 , ~.back39
+  +MACROMultiplex_SortBlock  40 , .back39 , ~.back40
+  +MACROMultiplex_SortBlock  41 , .back40 , ~.back41
+  +MACROMultiplex_SortBlock  42 , .back41 , ~.back42
+  +MACROMultiplex_SortBlock  43 , .back42 , ~.back43
+  +MACROMultiplex_SortBlock  44 , .back43 , ~.back44
+  +MACROMultiplex_SortBlock  45 , .back44 , ~.back45
+  +MACROMultiplex_SortBlock  46 , .back45 , ~.back46
+}
+!if Multiplex_items > 48 {
+  +MACROMultiplex_SortBlock  47 , .back46 , ~.back47
+  +MACROMultiplex_SortBlock  48 , .back47 , ~.back48
+  +MACROMultiplex_SortBlock  49 , .back48 , ~.back49
+  +MACROMultiplex_SortBlock  50 , .back49 , ~.back50
+  +MACROMultiplex_SortBlock  51 , .back50 , ~.back51
+  +MACROMultiplex_SortBlock  52 , .back51 , ~.back52
+  +MACROMultiplex_SortBlock  53 , .back52 , ~.back53
+  +MACROMultiplex_SortBlock  54 , .back53 , ~.back54
+}
+!if Multiplex_items > 56 {
+  +MACROMultiplex_SortBlock  55 , .back54 , ~.back55
+  +MACROMultiplex_SortBlock  56 , .back55 , ~.back56
+  +MACROMultiplex_SortBlock  57 , .back56 , ~.back57
+  +MACROMultiplex_SortBlock  58 , .back57 , ~.back58
+  +MACROMultiplex_SortBlock  59 , .back58 , ~.back59
+  +MACROMultiplex_SortBlock  60 , .back59 , ~.back60
+  +MACROMultiplex_SortBlock  61 , .back60 , ~.back61
+}
+.over47 ldy Multiplex_indextable
+  rts
+}
+
+!ifdef Multiplex_SortRelocate {
+  * = Multiplex_SortRelocate_Start
+} else {
+Multiplex_Sort = Multiplex_Sort_Real
+}
+
+
+;--------------------------------------
+!zn {
+Multiplex_SetSpritePointer
+  ; Store hi
+!ifdef Multiplex_MaintainPriority { } else {
+  sta Multiplex_ISFP1+2
+  sta Multiplex_ISFP2+2
+  sta Multiplex_ISFP3+2
+  sta Multiplex_ISFP4+2
+  sta Multiplex_ISFP5+2
+  sta Multiplex_ISFP6+2
+  sta Multiplex_ISFP7+2
+  sta Multiplex_ISFP8+2
+}
+  sta Multiplex_ISFP9+2
+  sta Multiplex_ISFP10+2
+  sta Multiplex_ISFP11+2
+  sta Multiplex_ISFP12+2
+  sta Multiplex_ISFP13+2
+  sta Multiplex_ISFP14+2
+  sta Multiplex_ISFP15+2
+  sta Multiplex_ISFP16+2
+  rts
+}
+
+!ifdef Multiplex_DiscardSpritesYPosUseLocation {
+!zn {
+; Entry:
+; A = Discard raster IRQ position
+; X = Discard sprite position for sort
+; Exit:
+; A = Trashed
+Multiplex_SetDiscardPosition
+  sta Multiplex_DiscardSpritesYPosLocation
+  stx Multiplex_DiscardSpritesYPosForSortLocation
+  sec
+  sbc #Multiplex_rasterHeight+1
+  sta Multiplex_DiscardSpritesYPosLocation2
+  rts
+}
+}
+
+!ifdef Multiplex_SplitSort {
+CopyMultiplexTables
+  ; Copy over the index table that was sorted during the multiplexor IRQ
+  ldx #Multiplex_items-1
+.mpc1
+  lda MultiplexSort_indextable,x
+  sta Multiplex_indextable,x
+  dex
+  bpl .mpc1
+  ; Also copy over the max sprites this frame
+  lda MultiplexSort_MaxSprSorted
+  sta Multiplex_MaxSprSorted
+  rts
+}
+
+!ifdef Multiplexor_UseDoubleHeight {
+Multiplex_SetNormalSpriteHeight
+  lda #VIC2SpriteSizeY
+  sta Multiplex_DynamicSpriteHeight
+  lda #(VIC2SpriteSizeY+Multiplex_TopRasterHeight)+1
+  sta Multiplex_DynamicSpriteHeight2
+  lda #Multiplex_spriteHeightTweak
+  sta Multiplex_DynamicSpriteHeight3
+  rts
+
+Multiplex_SetDoubleSpriteHeight
+  lda #VIC2SpriteSizeY + VIC2SpriteSizeY
+  sta Multiplex_DynamicSpriteHeight
+  lda #VIC2SpriteSizeY + (VIC2SpriteSizeY+Multiplex_TopRasterHeight)+1
+  sta Multiplex_DynamicSpriteHeight2
+  lda #VIC2SpriteSizeY + Multiplex_spriteHeightTweak
+  sta Multiplex_DynamicSpriteHeight3
+  rts
+}
+
+!ifndef Multiplex_LeanAndMean {
+!ifndef Multiplex_DoNotAlignSpriteTables {
+!align 255, 0
+}
+
+;--------------------------------------
+; These default Y values show the minimal amount of sprite packing, with 1 y pos increment per sprite, that is available.
+; Note with Multiplexor_DebugBorder this shows eight sprites updated every IRQ band
+!ifndef defined_Multiplex_YPos {
+Multiplex_YPos
+  !fill Multiplex_items , $ff
+}
+
+!ifndef defined_Multiplex_XPosLo {
+Multiplex_XPosLo
+  !fill Multiplex_items , $ff
+}
+
+!ifndef defined_Multiplex_XPosHi {
+Multiplex_XPosHi
+  !fill Multiplex_items , $ff
+}
+
+!ifdef Multiplexor_UseMulticolour {
+!ifndef defined_Multiplex_Multicolour {
+Multiplex_Multicolour
+  !fill Multiplex_items , $ff
+}
+}
+!ifdef Multiplexor_UsePriority {
+!ifndef defined_Multiplex_Priority {
+Multiplex_Priority
+  !fill Multiplex_items , $ff
+}
+}
+!ifdef Multiplexor_UseDoubleWidth {
+!ifndef defined_Multiplex_DoubleWidth {
+Multiplex_DoubleWidth
+  !fill Multiplex_items , $ff
+}
+}
+!ifdef Multiplexor_UseDoubleHeight {
+!ifndef defined_Multiplex_DoubleHeight {
+Multiplex_DoubleHeight
+  !fill Multiplex_items , $ff
+}
+}
+
+
+!ifndef defined_Multiplex_Colour {
+Multiplex_Colour
+  !fill Multiplex_items , $ff
+}
+
+!ifndef defined_Multiplex_SpriteFrame {
+Multiplex_SpriteFrame
+  !fill Multiplex_items , $ff
+}
+
+!ifndef defined_Multiplex_Sortlo {
+Multiplex_Sortlo  !fill Multiplex_items-1
+}
+!ifndef defined_Multiplex_Sorthi {
+Multiplex_Sorthi  !fill Multiplex_items-1
+}
+
+}
+
+MarkMultiplexorEndCode = *
