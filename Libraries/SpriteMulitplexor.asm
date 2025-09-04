@@ -23,7 +23,7 @@ Multiplexor.FLAG_ENABLED        =128
 
 Multiplexor.FLAGS_ALLOWED = Multiplexor.MPX_X_MSB_ALLOWED + Multiplexor.MPX_X_EXPANSION_ALLOWED + Multiplexor.MPX_Y_EXPANSION_ALLOWED + Multiplexor.MPX_MULTICOLOUR_ALLOWED + Multiplexor.MPX_DATA_PRIORITY_ALLOWED + Multiplexor.MPX_ENABLED_ALLOWED 
 
-Multiplexor.VirtualSpriteCount    =24     ; Must be a multiple of 8
+Multiplexor.VirtualSpriteCount    =16     ; Must be a multiple of 8
 
 ; amount iof lines before a sprite we need to schedule the raster to give things enough time
 .RASTERS_PROCESSING_DURATION=11 ; number of lines to process the hardware sprites excluding the vic flags
@@ -185,6 +185,7 @@ Multiplexor.VirtualSpriteCount    =24     ; Must be a multiple of 8
 
 .SortSpriteList
   ; Bubble Sort
+  inc VIC_BORDER_COLOUR
 .SortLoop
   lda #1
   sta .SortComplete

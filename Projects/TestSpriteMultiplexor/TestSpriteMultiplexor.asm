@@ -7,16 +7,22 @@ Multiplexor.MPX_Y_EXPANSION_ALLOWED   =0
 Multiplexor.MPX_MULTICOLOUR_ALLOWED   =0
 Multiplexor.MPX_DATA_PRIORITY_ALLOWED =0
 Multiplexor.MPX_ENABLED_ALLOWED       =0
+Multiplexor.MPX_DEBUG_BORDER          =1
+Multiplexor.MPX_USE_STAGING_AREA      =1
 
 
 !source "..\..\MACROS\Macros.asm",once
 !source "..\..\CHIPLabels\VICLabels.asm",once
 
-!source "..\..\Libraries\SpriteMulitplexor.asm",once
+!source "..\..\Libraries\SpriteMulitplexorV2.asm",once
 
+!source "circle.asm",once
+!source "sinwave.asm",once
 
 
 startofprogram
+  lda #VIC_COLOUR_BLACK
+  sta VIC_BORDER_COLOUR
   +MACHINE_INIT
   lda #VIC_CONTROL_REGISTER_1_DEFAULT
   sta VIC_CONTROL_REGISTER_1
@@ -44,132 +50,208 @@ startofprogram
   sta VIC_SPRITE_ENABLE
 
   +MPX_INITIATE VIC_SCREEN_START
-  !for sprite = 0 to 7
-    +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
-    +MPX_SET_XCOORD sprite, 50+sprite*30
-    +MPX_SET_YCOORD sprite,60+sprite
-    +MPX_SET_MEMORY_POINTER sprite,sprite
-    +MPX_SET_COLOUR sprite,1
-  !end
-  !for sprite = 0 to 7
-    +MPX_SET_XCOORD sprite+8, 30+sprite*25
-    +MPX_SET_YCOORD sprite+8,100+sprite
-    +MPX_SET_MEMORY_POINTER sprite+8,sprite+8
-    +MPX_SET_COLOUR sprite+8,1
-  !end
-  !for sprite = 0 to 7
-    +MPX_SET_XCOORD sprite+16, 30+sprite*25
-    +MPX_SET_YCOORD sprite+16,160-sprite
-    +MPX_SET_MEMORY_POINTER sprite+16,sprite+16
-    +MPX_SET_COLOUR sprite+16,1
-  !end
-  +MPX_SET_FLAG 2, Multiplexor.FLAG_Y_EXPAND
   
+  ;jmp BasicSpriteTest
+  jmp LineTest
+  ;jmp ClockTest
+  ;jmp SinTest
+  
+SetupRasterIRQ
   lda #<Multiplexor.EntryPoint
   sta KERNAL_IRQ_SERVICE_ROUTINE
   lda #>Multiplexor.EntryPoint
   sta KERNAL_IRQ_SERVICE_ROUTINE+1
   
-  ; initiate the raster interrupt
-  lda #0
-  sta VIC_RASTER
-  lda #$7f
-  and VIC_CONTROL_REGISTER_1
-  sta VIC_CONTROL_REGISTER_1
-  
   lda #1
   sta VIC_IRQ_CONTROL
-  cli
 
-  jmp .gameloop
-  
-  lda #<.RasterIRQEntry
-  sta KERNAL_IRQ_SERVICE_ROUTINE
-  lda #>.RasterIRQEntry
-  sta KERNAL_IRQ_SERVICE_ROUTINE+1
-  
-  ; initiate the raster interrupt
-  lda #70
-  sta VIC_RASTER
-  lda #1
-  sta VIC_IRQ_CONTROL
-  cli
-  
-.gameloop
-  +WAIT_FOR_RASTER_BOTTOM_BORDER
-  lda #4
-  sta VIC_BORDER_COLOUR
-  +WAIT_FOR_RASTER_FULL VIC_RASTER_LINES_PAL-1
-  lda #5
-  sta VIC_BORDER_COLOUR
-  jmp .gameloop
-  
-.RasterIRQEntry
-  inc VIC_BORDER_COLOUR
-  +PUSH_REGISTERS_ON_STACK
-  +ACK_RASTER_IRQ
+  rts
 
-  ; Line 1
-   !for sprite = 0 to 7
-    +SET_SPRITE_Y sprite,80
-   !end
+EmptyGameLoop
+  jmp EmptyGameLoop
 
-  lda #<.RasterIRQEntry2
-  sta KERNAL_IRQ_SERVICE_ROUTINE
-  lda #>.RasterIRQEntry2
-  sta KERNAL_IRQ_SERVICE_ROUTINE+1
-  lda #110
-  sta VIC_RASTER
-
-  +POP_REGISTERS_OFF_STACK
-  dec VIC_BORDER_COLOUR
-  rti
-
-.RasterIRQEntry2
-  inc VIC_BORDER_COLOUR
-  +PUSH_REGISTERS_ON_STACK
-  +ACK_RASTER_IRQ
-
-  ; Line 1
-   !for sprite = 0 to 7
-    +SET_SPRITE_Y sprite,120
-   !end
-
-  lda #<.RasterIRQEntry
-  sta KERNAL_IRQ_SERVICE_ROUTINE
-  lda #>.RasterIRQEntry
-  sta KERNAL_IRQ_SERVICE_ROUTINE+1
-  lda #70
-  sta VIC_RASTER
-
-  +POP_REGISTERS_OFF_STACK
-  dec VIC_BORDER_COLOUR
-  rti
-
-.loop
-  lda #VIC_COLOUR_BLACK
-  sta VIC_BORDER_COLOUR
-  !for sprite = 0 to 7
-    +SET_SPRITE_Y sprite,40
+LineTest
+  +MPX_SET_NUMBER_OF_SPRITES 24
+  !for sprite = 0 to 23
+    +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
+    +MPX_SET_MEMORY_POINTER sprite,sprite
+    +MPX_SET_COLOUR sprite,1 +(sprite and 3)
+    ;+MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(12*sprite)
+    ;+MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*10)
   !end
-  +WAIT_FOR_RASTER_TOP_BORDER
-  lda #VIC_COLOUR_WHITE
-  sta VIC_BORDER_COLOUR
-
-  +WAIT_FOR_RASTER 100
-
   !for sprite = 0 to 7
-    +SET_SPRITE_Y sprite,140
+    +MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    
+SPRITE_GAP=1
+    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
+    +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
+    +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
+  !end
+  jsr SetupRasterIRQ
+  cli
+  
+  jmp EmptyGameLoop
+
+
+BasicSpriteTest
+  +MPX_SET_NUMBER_OF_SPRITES 16
+  !for sprite = 0 to 15
+    +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
+    +MPX_CLEAR_FLAG sprite,Multiplexor.FLAG_PRIORITY
+    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*10)
+  !end
+  !for sprite = 0 to 7
+    +MPX_SET_COLOUR sprite,VIC_COLOUR_WHITE
+    +MPX_SET_COLOUR 8+sprite,VIC_COLOUR_GREEN
+  !end
+  !for sprite = 0 to 7
+    +MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(40*sprite)
+    +MPX_SET_XCOORD 8+sprite,VIC_SPRITE_BORDER_RIGHT-40 -(40*sprite)
   !end
 
-  +WAIT_FOR_RASTER_BOTTOM_BORDER
-  lda #VIC_COLOUR_RED
-  sta VIC_BORDER_COLOUR
-  +WAIT_FOR_RASTER_MSB_1
-  +WAIT_FOR_RASTER_MSB_0
-
-  jmp .loop
+  !for sprite = 0 to 15
+    +MPX_SET_MEMORY_POINTER sprite,sprite
+  !end
   
+  +MPX_SET_FLAG 13,Multiplexor.FLAG_X_EXPAND
+  +MPX_SET_FLAG 12,Multiplexor.FLAG_Y_EXPAND
+  +MPX_SET_FLAG 11,Multiplexor.FLAG_MULTICOLOUR
+  +MPX_CLEAR_FLAG 10,Multiplexor.FLAG_ENABLED
+  
+  jsr SetupRasterIRQ
+  cli
+  
+  jmp EmptyGameLoop
+
+SinTest
+  +MPX_SET_NUMBER_OF_SPRITES SinWave.SPRITE_COUNT
+  !for spriteIndex = 0 to SinWave.SPRITE_COUNT-1
+    +MPX_SET_MEMORY_POINTER spriteIndex,spriteIndex
+    +MPX_SET_COLOUR spriteIndex,1 +(spriteIndex and 3)    
+    ;+MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
+    ; +MPX_SET_YCOORD spriteIndex,VIC_SPRITE_BORDER_TOP+(15*spriteIndex)
+  !end
+  ;lda #0
+  !for spriteIndex = 0 to SinWave.SPRITE_COUNT-1
+    +MPX_SET_XCOORD spriteIndex,VIC_SPRITE_BORDER_LEFT+(16*spriteIndex)
+  !end
+
+  lda #$ff
+  sta VIC_SPRITE_ENABLE
+  jsr SpriteSetCoordsSinWave
+  ;jsr Multiplexor.CopyStagingAreaToActive
+  jsr SetupRasterIRQ
+  cli
+
+SinGameLoop
+  ;!for spriteIndex = 0 to SinWave.SPRITE_COUNT-1
+  ;  inc SinWave.SpriteIndexes+spriteIndex
+  ;!end
+  ;jsr SpriteSetCoordsSinWave
+  ;+WAIT_FOR_RASTER_MSB_0
+  ;+WAIT_FOR_RASTER 30
+  jmp SinGameLoop
+  
+SpriteSetCoordsSinWave
+  ldx #0
+SpriteSetSinWaveYCoordsLoop
+  lda SinWave.SpriteIndexes,x
+  tay
+  
+  lda SinWave.YCoords,y
+  !if Multiplexor.MPX_USE_STAGING_AREA  {
+    sta Multiplexor.StagingYCoords,x
+  } else {
+    sta Multiplexor.YCoords,x
+  }
+
+  inx
+  cpx #SinWave.SPRITE_COUNT
+  bcc SpriteSetSinWaveYCoordsLoop
+
+  rts
+  
+  
+  
+  
+  
+  
+ClockTest
+  +MPX_SET_NUMBER_OF_SPRITES CLOCK_SPRITE_COUNT
+  !for sprite = 0 to CLOCK_SPRITE_COUNT-1
+    +MPX_SET_MEMORY_POINTER sprite,sprite
+  !end
+
+  lda #$ff
+  sta VIC_SPRITE_ENABLE
+  jsr SpriteSetCoordsClock
+  jsr SetupRasterIRQ
+  cli
+
+ClockGameLoop
+  jsr SpriteAdvanceIndexes
+  jmp ClockGameLoop
+  
+SpriteSetCoordsClock
+  ldx #0
+SpriteSetCoordsLoop
+  lda SpriteIndexes,x
+  tay
+  
+  lda CircleYCoords,y
+  !if Multiplexor.MPX_USE_STAGING_AREA  {
+    sta Multiplexor.StagingYCoords,x
+  } else {
+    sta Multiplexor.YCoords,x
+  }
+  
+  lda CircleXCoordsLSB,y
+  !if Multiplexor.MPX_USE_STAGING_AREA  {
+    sta Multiplexor.StagingXCoords,x
+  } else {
+    sta Multiplexor.XCoords,x
+  }
+  
+  lda CircleXCoordsMSB,y
+  bne XHasMSB
+  ; Turn off MSB
+  !if Multiplexor.MPX_USE_STAGING_AREA  {
+    lda Multiplexor.StagingFlags,x
+    and #(255-Multiplexor.FLAG_X_MSB)
+    sta Multiplexor.StagingFlags,x
+  } else {
+    lda Multiplexor.Flags,x
+    and #(255-Multiplexor.FLAG_X_MSB)
+    sta Multiplexor.Flags,x
+  }
+  jmp AfterXMSBCheck
+XHasMSB
+  ; turn on MSB
+  !if Multiplexor.MPX_USE_STAGING_AREA  {
+    lda Multiplexor.StagingFlags,x
+    ora #Multiplexor.FLAG_X_MSB
+    sta Multiplexor.StagingFlags,x
+  } else {
+    lda Multiplexor.Flags,x
+    ora #Multiplexor.FLAG_X_MSB
+    sta Multiplexor.Flags,x
+  }
+AfterXMSBCheck  
+  inx
+  cpx #CLOCK_SPRITE_COUNT
+  bcc SpriteSetCoordsLoop
+  rts
+
+SpriteAdvanceIndexes
+  ldx #0
+SpriteAdvanceIndexesLoop
+  inc SpriteIndexes,x
+  inx
+  cpx CLOCK_SPRITE_COUNT
+  bne SpriteAdvanceIndexesLoop
+  rts
   
 SPRITE_DEFINITION_START=$8000
 *=SPRITE_DEFINITION_START
