@@ -1,5 +1,5 @@
-!source "..\..\MACROS\Macros.asm",once
-!source "..\..\CHIPLabels\VICLabels.asm",once
+!source "..\Macros\Macros.asm",once
+!source "..\CHIPLabels\VICLabels.asm",once
 
 
 !zone Multiplexor
@@ -17,8 +17,7 @@ Multiplexor.MAX_VIRTUAL_SPRITES           = 32
 ;Multiplexor.MPX_DEBUG_BORDER          =1
 ;Multiplexor.MPX_USE_STAGING_AREA      =0
 
-Multiplexor.CLOSE_RASTER_SEPARATION                =3
-Multiplexor.RASTER_LINES_DELAY_AFTER_BOTTOM        =1
+Multiplexor.CLOSE_RASTER_SEPARATION                =5
 
 Multiplexor.MPX_FLAGS_ALLOWED = Multiplexor.MPX_X_MSB_ALLOWED + Multiplexor.MPX_X_EXPANSION_ALLOWED + Multiplexor.MPX_Y_EXPANSION_ALLOWED + Multiplexor.MPX_MULTICOLOUR_ALLOWED + Multiplexor.MPX_DATA_PRIORITY_ALLOWED + Multiplexor.MPX_ENABLED_ALLOWED
 
@@ -217,8 +216,6 @@ Multiplexor.FLAG_ENABLED        =128
 ;
 ; 817
 
-Multiplexor.AlreadyRunning    !byte 0
-
 Multiplexor.CopyStagingAreaToActive
   ldx #0
 Multiplexor.CopyStagingAreaToActiveLoop
@@ -244,33 +241,22 @@ Multiplexor.CopyStagingAreaToActiveLoop
 
 
 Multiplexor.EntryPoint
-  !if Multiplexor.MPX_DEBUG_BORDER {
-    inc VIC_BORDER_COLOUR
-  }
   +PUSH_REGISTERS_ON_STACK
-  ;lda Multiplexor.AlreadyRunning
-  ;beq Multiplexor.NotRunning
-  ;+POP_REGISTERS_OFF_STACK
-  ;rti
 
-Multiplexor.NotRunning
-  lda #1
-  sta Multiplexor.AlreadyRunning
-  
-Multiplexor.InitialSpriteListEntryPoint
-  ldy Multiplexor.CurrentVirtualSpriteIndex
-  bne Multiplexor.UpdateSpriteList
-  
+  !if Multiplexor.MPX_DEBUG_BORDER {
+    lda #VIC_COLOUR_RED
+    sta VIC_BORDER_COLOUR
+  }
+
   ; we are creating the initial sprite list here
   !if Multiplexor.MPX_USE_STAGING_AREA {
-    inc VIC_BORDER_COLOUR
     jsr Multiplexor.CopyStagingAreaToActive
-    dec VIC_BORDER_COLOUR
   }
+  lda #VIC_COLOUR_LIGHT_BLUE
+  sta VIC_BORDER_COLOUR
 
-  ;inc VIC_BORDER_COLOUR
   jsr Multiplexor.SortSpriteList
-  ;dec VIC_BORDER_COLOUR
+  inc VIC_BORDER_COLOUR
   ; initial sprite flags
   !if Multiplexor.MPX_FLAGS_ALLOWED {
     jsr Multiplexor.HandleInitialSpriteFlags
@@ -326,16 +312,42 @@ Multiplexor.InitialSpriteListFinished
   sta Multiplexor.ReplacementSpriteIndex
   lda Multiplexor.YCoords
   clc
-  adc # VIC_HARDWARE_SPRITE_HEIGHT + Multiplexor.RASTER_LINES_DELAY_AFTER_BOTTOM
+  adc # VIC_HARDWARE_SPRITE_HEIGHT
+  bcc Multiplexor.InitialRequiredRaster
+Multiplexor.InitialRasterSchedule
+  lda #VIC_SPRITE_BORDER_BOTTOM
+Multiplexor.InitialRequiredRaster
+  sta VIC_RASTER
   
+  lda #$7f   ; turn off raster MSB
+  and VIC_CONTROL_REGISTER_1
+  sta VIC_CONTROL_REGISTER_1
 
-  jmp Multiplexor.ScheduleRaster
+  +STORE_WORD Multiplexor.UpdateSpriteList,KERNAL_IRQ_SERVICE_ROUTINE
+
+  +ACK_RASTER_IRQ  
+  
+  !if Multiplexor.MPX_DEBUG_BORDER {
+    lda #VIC_COLOUR_BLACK
+    sta VIC_BORDER_COLOUR
+  }
+  +POP_REGISTERS_OFF_STACK
+  rti
+  
   
 Multiplexor.UpdateSpriteList
+  +PUSH_REGISTERS_ON_STACK
+
+  !if Multiplexor.MPX_DEBUG_BORDER {
+    lda #VIC_COLOUR_GREEN
+    sta VIC_BORDER_COLOUR
+  }
+
+Multiplexor.UpdateSpriteListEntry2
+
   ; At this point we have already got the initial sprite list on the screen
   ; we just need to replace the current hardware sprite with the current
   ; virtual sprite
-  ; 878
   ldy Multiplexor.CurrentVirtualSpriteIndex
   ldx Multiplexor.CurrentHardwareSpriteIndex
 
@@ -376,29 +388,35 @@ Multiplexor.UpdateSpriteList
   ldy Multiplexor.ReplacementSpriteIndex
   lda Multiplexor.YCoords,y
   clc
-  adc #VIC_HARDWARE_SPRITE_HEIGHT + Multiplexor.RASTER_LINES_DELAY_AFTER_BOTTOM
+  adc #VIC_HARDWARE_SPRITE_HEIGHT
+  bcs Multiplexor.ScheduleRasterAtBottom
+  adc #Multiplexor.CLOSE_RASTER_SEPARATION
   bcs Multiplexor.ScheduleRasterAtBottom
   ;sta .RequestedRaster
   cmp VIC_RASTER
 
   ; the next sprite to display is less than the current raster - so we can just try and display it
-  bcc Multiplexor.UpdateSpriteList
+  bcs Multiplexor.RequiredRaster
   
-  ; the next required sprite raster is > the current raster so need to schedule it
-  jmp Multiplexor.RequiredRaster
+  ; the next required sprite raster is <= the current raster so just go back and draw the next sprite
+  lda #VIC_COLOUR_CYAN
+  sta VIC_BORDER_COLOUR
+  jmp Multiplexor.UpdateSpriteListEntry2
   ;
 Multiplexor.SpriteUpdateFinished
   ; we have reached the end of the sprite list
   ; lets schedule the next raster to be bottom of the screen
   lda #0
   sta Multiplexor.CurrentVirtualSpriteIndex
+  +STORE_WORD Multiplexor.EntryPoint,KERNAL_IRQ_SERVICE_ROUTINE
+
   
   jmp Multiplexor.ScheduleRasterAtBottom
 
 Multiplexor.ScheduleRaster
   bcc Multiplexor.RequiredRaster
 Multiplexor.ScheduleRasterAtBottom
-  lda #VIC_SPRITE_BORDER_BOTTOM + Multiplexor.RASTER_LINES_DELAY_AFTER_BOTTOM
+  lda #VIC_SPRITE_BORDER_BOTTOM
 Multiplexor.RequiredRaster  
   sta VIC_RASTER
   
@@ -407,14 +425,14 @@ Multiplexor.RequiredRaster
   sta VIC_CONTROL_REGISTER_1
 Multiplexor.AfterRasterMSB
 
-  +ACK_RASTER_IRQ  
+
+  +ACK_RASTER_IRQ
   
-  lda #0
-  sta Multiplexor.AlreadyRunning
-  +POP_REGISTERS_OFF_STACK
   !if Multiplexor.MPX_DEBUG_BORDER {
-    dec VIC_BORDER_COLOUR
+    lda #VIC_COLOUR_BLACK
+    sta VIC_BORDER_COLOUR
   }
+  +POP_REGISTERS_OFF_STACK
   rti
 
 Multiplexor.SortSpriteList

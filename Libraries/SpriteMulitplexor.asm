@@ -1,5 +1,5 @@
-!source "..\..\MACROS\Macros.asm",once
-!source "..\..\CHIPLabels\VICLabels.asm",once
+!source "..\Macros\Macros.asm",once
+!source "..\CHIPLabels\VICLabels.asm",once
 
 
 !zone Multiplexor

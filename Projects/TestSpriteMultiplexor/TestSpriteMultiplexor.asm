@@ -1,6 +1,12 @@
 *=$0801
 !basic startofprogram
 
+!source "..\..\CHIPLabels\VICLabels.asm",once
+!source "..\..\CHIPLabels\CIALabels.asm",once
+!source "..\..\CHIPLabels\MiscLabels.asm",once
+
+!source "..\..\Macros\Macros.asm",once
+
 Multiplexor.MPX_X_MSB_ALLOWED         =1
 Multiplexor.MPX_X_EXPANSION_ALLOWED   =0
 Multiplexor.MPX_Y_EXPANSION_ALLOWED   =0
@@ -11,14 +17,14 @@ Multiplexor.MPX_DEBUG_BORDER          =1
 Multiplexor.MPX_USE_STAGING_AREA      =1
 
 
-!source "..\..\MACROS\Macros.asm",once
-!source "..\..\CHIPLabels\VICLabels.asm",once
 
 !source "..\..\Libraries\SpriteMulitplexorV2.asm",once
+
 
 !source "circle.asm",once
 !source "sinwave.asm",once
 
++EMPTY_IRQ_ROUTINE
 
 startofprogram
   lda #VIC_COLOUR_BLACK
@@ -57,10 +63,8 @@ startofprogram
   ;jmp SinTest
   
 SetupRasterIRQ
-  lda #<Multiplexor.EntryPoint
-  sta KERNAL_IRQ_SERVICE_ROUTINE
-  lda #>Multiplexor.EntryPoint
-  sta KERNAL_IRQ_SERVICE_ROUTINE+1
+
+  +STORE_WORD Multiplexor.EntryPoint,KERNAL_IRQ_SERVICE_ROUTINE
   
   lda #1
   sta VIC_IRQ_CONTROL
@@ -84,7 +88,7 @@ LineTest
     +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     
-SPRITE_GAP=1
+SPRITE_GAP=2
     +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
     +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
     +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)

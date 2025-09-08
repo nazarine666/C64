@@ -4,6 +4,13 @@
 !source "..\CHIPLabels\VICLabels.asm",once
 !source "..\CHIPLabels\CIALabels.asm",once
 
+!macro STORE_WORD value,location
+  lda #<value
+  sta location
+  lda #>value
+  sta location+1
+!end
+
 !macro ACK_RASTER_IRQ
   lda #1
   sta VIC_IRQ_STATUS
@@ -181,7 +188,7 @@
   pla
 !end
 
-
+!macro EMPTY_IRQ_ROUTINE  
 EmptyIRQRoutine
   pha
   +ACK_RASTER_IRQ
@@ -190,4 +197,4 @@ EmptyIRQRoutine
   
 EmptyNMIRoutine
   rti
-
+!end
