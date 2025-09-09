@@ -14,7 +14,7 @@ Multiplexor.MPX_MULTICOLOUR_ALLOWED   =0
 Multiplexor.MPX_DATA_PRIORITY_ALLOWED =0
 Multiplexor.MPX_ENABLED_ALLOWED       =0
 Multiplexor.MPX_DEBUG_BORDER          =1
-Multiplexor.MPX_USE_STAGING_AREA      =1
+Multiplexor.MPX_USE_STAGING_AREA      =0
 
 
 
@@ -75,8 +75,8 @@ EmptyGameLoop
   jmp EmptyGameLoop
 
 LineTest
-  +MPX_SET_NUMBER_OF_SPRITES 24
-  !for sprite = 0 to 23
+  +MPX_SET_NUMBER_OF_SPRITES 16
+  !for sprite = 0 to 15
     +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
     +MPX_SET_MEMORY_POINTER sprite,sprite
     +MPX_SET_COLOUR sprite,1 +(sprite and 3)
@@ -86,13 +86,15 @@ LineTest
   !for sprite = 0 to 7
     +MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
-    +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    ;+MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     
 SPRITE_GAP=2
-    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
-    +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
-    +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
+    +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
+    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
+    ;+MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
   !end
+  jsr Multiplexor.SortSpriteList
+  
   jsr SetupRasterIRQ
   cli
   

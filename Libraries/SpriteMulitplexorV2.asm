@@ -84,6 +84,8 @@ Multiplexor.FLAG_ENABLED        =128
   sta Multiplexor.StoreScreenPointerUpdate+1
   lda #>(screen_address+VIC_SPRITE_MEMORY_POINTER_OFFSET)
   sta Multiplexor.StoreScreenPointerUpdate+2
+  
+  +MPX_INTIATE_SPRITE_INDEXES
 !end
 
 !Macro MPX_SET_XCOORD sprite,xcoord
@@ -435,29 +437,89 @@ Multiplexor.AfterRasterMSB
   +POP_REGISTERS_OFF_STACK
   rti
 
+!macro MPX_TRUE_Y_INDEX_TO_Y
+  lda Multiplexor.Indexes,y
+  tay
+!end
+!macro MPX_TRUE_Y_INDEX_TO_X
+  lda Multiplexor.Indexes,y
+  tax
+!end
+
+Multiplexor.SortIndex !byte 0
+
+!macro MPX_INTIATE_SPRITE_INDEXES
+  !for sprite= 0 to Multiplexor.MAX_VIRTUAL_SPRITES
+    lda #sprite
+    sta Multiplexor.Indexes+sprite
+  !end
+!end
+
 Multiplexor.SortSpriteList
-  ; Bubble Sort
 Multiplexor.SortLoop
   lda #1
+  sta Multiplexor.SortIndex
   sta Multiplexor.SortComplete
-  ldy #1
-Multiplexor.SortComparePair
-  lda Multiplexor.YCoords,y
-  cmp Multiplexor.YCoords-1,y
-  bcs Multiplexor.PairSorted
-  ; swap pair
-  jsr Multiplexor.SwapPair
 
+Multiplexor.SortCompare
+  ldy Multiplexor.SortIndex
+  dey
+  +MPX_TRUE_Y_INDEX_TO_X      ; X = Indexes,(y-1)
+  
+  ldy Multiplexor.SortIndex
+  +MPX_TRUE_Y_INDEX_TO_Y      ; Y = Indexes,y
+  
+  ; at this point - X hold the 1st element index
+  ; y holds the second element index
+  
+  lda Multiplexor.YCoords,x             ; A = Ycoord at 1st Element
+  cmp Multiplexor.YCoords,y             ; Compare with YCoord at 2nd element
+  bcc Multiplexor.PairSorted            ; If 1st Ycoord < 2nd YCoord then pair already sorted
+  ; Swap the indexes around here
+  ldy Multiplexor.SortIndex
+  lda Multiplexor.Indexes,y
+  pha
+  lda Multiplexor.Indexes-1,y
+  sta Multiplexor.Indexes,y
+  pla
+  sta Multiplexor.Indexes-1,y
   ; flag as not sorted
   lda #0
   sta Multiplexor.SortComplete
 Multiplexor.PairSorted
-  iny
+  inc Multiplexor.SortIndex
+  ldy Multiplexor.SortIndex
   cpy Multiplexor.VirtualSpriteCount
-  bne Multiplexor.SortComparePair
+  bne Multiplexor.SortCompare   ;sort check the next pair
   lda Multiplexor.SortComplete
   beq Multiplexor.SortLoop
+  ; sort has finished
   rts
+  
+
+;Multiplexor.SortSpriteList
+;  ; Bubble Sort
+;Multiplexor.SortLoop
+;  lda #1
+;  sta Multiplexor.SortComplete
+;  ldy #1
+;Multiplexor.SortComparePair
+;  lda Multiplexor.YCoords,y
+;  cmp Multiplexor.YCoords-1,y
+;  bcs Multiplexor.PairSorted
+;  ; swap pair
+;  jsr Multiplexor.SwapPair
+
+;  ; flag as not sorted
+;  lda #0
+;  sta Multiplexor.SortComplete
+;Multiplexor.PairSorted
+;  iny
+;  cpy Multiplexor.VirtualSpriteCount
+;  bne Multiplexor.SortComparePair
+;  lda Multiplexor.SortComplete
+;  beq Multiplexor.SortLoop
+;  rts
 
 
 Multiplexor.SwapPair  
@@ -713,7 +775,8 @@ Multiplexor.CurrentVirtualSpriteIndex    !byte 0
 Multiplexor.CurrentHardwareSpriteIndex   !byte 0
 Multiplexor.ReplacementSpriteIndex       !byte 0
 
-
+Multiplexor.Indexes
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
 
 Multiplexor.XCoords
 !fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
