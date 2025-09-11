@@ -7,7 +7,7 @@
 
 !source "..\..\Macros\Macros.asm",once
 
-Multiplexor.MPX_X_MSB_ALLOWED         =0
+Multiplexor.MPX_X_MSB_ALLOWED         =1
 Multiplexor.MPX_X_EXPANSION_ALLOWED   =0
 Multiplexor.MPX_Y_EXPANSION_ALLOWED   =0
 Multiplexor.MPX_MULTICOLOUR_ALLOWED   =0
@@ -57,8 +57,8 @@ startofprogram
 
   +MPX_INITIATE VIC_SCREEN_START
   
-  ;jmp BasicSpriteTest
-  jmp LineTest
+  jmp BasicSpriteTest
+  ;jmp LineTest
   ;jmp ClockTest
   ;jmp SinTest
   
@@ -88,12 +88,11 @@ LineTest
     +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     
-SPRITE_GAP=1
+SPRITE_GAP=5
     +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
     +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
     +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
   !end
-  jsr Multiplexor.SortSpriteList
 
   jsr SetupRasterIRQ
   cli

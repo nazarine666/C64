@@ -15,7 +15,7 @@ Multiplexor.MAX_VIRTUAL_SPRITES           = 32
 ;Multiplexor.MPX_DATA_PRIORITY_ALLOWED =1
 ;Multiplexor.MPX_ENABLED_ALLOWED       =1
 ;Multiplexor.MPX_DEBUG_BORDER          =1
-;Multiplexor.MPX_USE_STAGING_AREA      =0
+
 
 Multiplexor.CLOSE_RASTER_SEPARATION                =5
 
@@ -51,35 +51,19 @@ Multiplexor.FLAG_ENABLED        =128
 
 !macro MPX_SET_FLAGS sprite,mask    
   lda #mask
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    sta Multiplexor.StagingFlags+sprite
-  } else  {
-    sta Multiplexor.Flags+sprite
-  }
+  sta Multiplexor.Flags+sprite
 !end
 
 !macro MPX_SET_FLAG sprite,flag
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    lda Multiplexor.StagingFlags+sprite
-    ora #flag
-    sta Multiplexor.StagingFlags+sprite
-  } else  {
-    lda Multiplexor.Flags+sprite
-    ora #flag
-    sta Multiplexor.Flags+sprite
-  }
+  lda Multiplexor.Flags+sprite
+  ora #flag
+  sta Multiplexor.Flags+sprite
 !end
 
 !macro MPX_CLEAR_FLAG sprite,flag
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    lda Multiplexor.StagingFlags+sprite
-    and #(255-flag)
-    sta Multiplexor.StagingFlags+sprite
-  } else  {
-    lda Multiplexor.Flags+sprite
-    and #(255-flag)
-    sta Multiplexor.Flags+sprite
-  }
+  lda Multiplexor.Flags+sprite
+  and #(255-flag)
+  sta Multiplexor.Flags+sprite
 !end
 
 !macro MPX_INITIATE screen_address
@@ -98,89 +82,45 @@ Multiplexor.FLAG_ENABLED        =128
 
 !Macro MPX_SET_XCOORD sprite,xcoord
   lda #<xcoord
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    sta Multiplexor.StagingXCoords+sprite
-  } else {
-    sta Multiplexor.XCoords+sprite
-  }
+  sta Multiplexor.XCoords+sprite
   
   !if xcoord<256 {
-    ; +MPX_CLEAR_FLAG sprite,Multiplexor.FLAG_X_MSB
-    !if Multiplexor.MPX_USE_STAGING_AREA {
-      lda Multiplexor.StagingFlags+sprite
-      and #(255-Multiplexor.FLAG_X_MSB)
-      sta Multiplexor.StagingFlags+sprite
-    } else {
-      lda Multiplexor.Flags+sprite
-      and #(255-Multiplexor.FLAG_X_MSB)
-      sta Multiplexor.Flags+sprite
-    }
+    lda Multiplexor.Flags+sprite
+    and #(255-Multiplexor.FLAG_X_MSB)
+    sta Multiplexor.Flags+sprite
   }
   !if xcoord >255 {
-    ;+MPX_SET_FLAG sprite,Multiplexor.FLAG_X_MSB
-    !if Multiplexor.MPX_USE_STAGING_AREA {
-      lda Multiplexor.StagingFlags+sprite
-      ora #Multiplexor.FLAG_X_MSB
-      sta Multiplexor.StagingFlags+sprite
-    } else {
-      lda Multiplexor.Flags+sprite
-      ora #Multiplexor.FLAG_X_MSB
-      sta Multiplexor.Flags+sprite
-    }
+    lda Multiplexor.Flags+sprite
+    ora #Multiplexor.FLAG_X_MSB
+    sta Multiplexor.Flags+sprite
   }
 !end
 
 !Macro MPX_SET_YCOORD sprite,ycoord
   lda #ycoord
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    sta Multiplexor.StagingYCoords+sprite
-  } else {
-    sta Multiplexor.YCoords+sprite
-  }
+  sta Multiplexor.YCoords+sprite
 !end
 
 !macro MPX_SET_MEMORY_POINTER  sprite,pointer
   lda #pointer
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    sta Multiplexor.StagingPointers+sprite
-  } else {
-    sta Multiplexor.Pointers+sprite
-  }
+  sta Multiplexor.Pointers+sprite
 !end
 
 !Macro MPX_SET_COLOUR sprite,colour
   lda #colour
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    sta Multiplexor.StagingColours+sprite
-  } else {
-    sta Multiplexor.Colours+sprite
-  }
+  sta Multiplexor.Colours+sprite
 !end
 
 !macro MPX_ENABLE_SPRITE sprite
-  ;+MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    lda Multiplexor.StagingFlags+sprite
-    ora #Multiplexor.FLAG_ENABLED
-    sta Multiplexor.StagingFlags+sprite
-  } else {
-    lda Multiplexor.Flags+sprite
-    ora #Multiplexor.FLAG_ENABLED
-    sta Multiplexor.Flags+sprite
-  }
+  lda Multiplexor.Flags+sprite
+  ora #Multiplexor.FLAG_ENABLED
+  sta Multiplexor.Flags+sprite
 !end
 
 !macro MPX_DISABLE_SPRITE sprite
-  ;+MPX_CLEAR_FLAG sprite,Multiplexor.FLAG_ENABLED
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    lda Multiplexor.StagingFlags+sprite
-    and #(255-Multiplexor.FLAG_ENABLED)
-    sta Multiplexor.StagingFlags+sprite
-  } else {
-    lda Multiplexor.Flags+sprite
-    and #(255-Multiplexor.FLAG_ENABLED)
-    sta Multiplexor.Flags+sprite
-  }
+  lda Multiplexor.Flags+sprite
+  and #(255-Multiplexor.FLAG_ENABLED)
+  sta Multiplexor.Flags+sprite
 !end
 
 ; Pseudocode
@@ -226,29 +166,6 @@ Multiplexor.FLAG_ENABLED        =128
 ;
 ; 817
 
-Multiplexor.CopyStagingAreaToActive
-  ldx #0
-Multiplexor.CopyStagingAreaToActiveLoop
-  lda Multiplexor.StagingXCoords,x
-  sta Multiplexor.XCoords,x
-  
-  lda Multiplexor.StagingColours,x
-  sta Multiplexor.Colours,x
-  
-  lda Multiplexor.StagingPointers,x
-  sta Multiplexor.Pointers,x
-  
-  lda Multiplexor.StagingFlags,x
-  sta Multiplexor.Flags,x
-  
-  lda Multiplexor.StagingYCoords,x
-  sta Multiplexor.YCoords,x
-
-  inx
-  cpx Multiplexor.VirtualSpriteCount
-  bne Multiplexor.CopyStagingAreaToActiveLoop
-  rts
-
 
 Multiplexor.EntryPoint
   ; 835
@@ -260,10 +177,6 @@ Multiplexor.EntryPoint
   }
 
   ; we are creating the initial sprite list here
-  !if Multiplexor.MPX_USE_STAGING_AREA {
-    jsr Multiplexor.CopyStagingAreaToActive
-  }
-
   jsr Multiplexor.SortSpriteList
   ;inc VIC_BORDER_COLOUR
   ldy #0
@@ -763,23 +676,6 @@ Multiplexor.Pointers
 
 Multiplexor.Flags
 !fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
-
-
-Multiplexor.StagingXCoords
-!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
-
-Multiplexor.StagingYCoords
-!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
-
-Multiplexor.StagingColours
-!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
-
-Multiplexor.StagingPointers
-!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
-
-Multiplexor.StagingFlags
-!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
-
 
 
 Multiplexor.SortComplete                !byte 0
