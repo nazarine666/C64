@@ -186,6 +186,9 @@ Multiplexor.EntryPoint
   !if Multiplexor.MPX_FLAGS_ALLOWED {
     jsr Multiplexor.HandleInitialSpriteFlags
     ; y changed after this routine
+    ldy #0
+    sty Multiplexor.CurrentVirtualSpriteIndex
+    +MPX_TRUE_Y_INDEX_TO_Y
   }
   
   ldx #0
