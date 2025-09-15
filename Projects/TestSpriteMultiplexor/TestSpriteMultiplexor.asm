@@ -8,13 +8,12 @@
 !source "..\..\Macros\Macros.asm",once
 
 Multiplexor.MPX_X_MSB_ALLOWED         =1
-Multiplexor.MPX_X_EXPANSION_ALLOWED   =0
-Multiplexor.MPX_Y_EXPANSION_ALLOWED   =0
-Multiplexor.MPX_MULTICOLOUR_ALLOWED   =0
+Multiplexor.MPX_X_EXPANSION_ALLOWED   =1
+Multiplexor.MPX_Y_EXPANSION_ALLOWED   =1
+Multiplexor.MPX_MULTICOLOUR_ALLOWED   =1
 Multiplexor.MPX_DATA_PRIORITY_ALLOWED =0
 Multiplexor.MPX_ENABLED_ALLOWED       =0
 Multiplexor.MPX_DEBUG_BORDER          =1
-Multiplexor.MPX_USE_STAGING_AREA      =0
 
 
 
@@ -57,8 +56,8 @@ startofprogram
 
   +MPX_INITIATE VIC_SCREEN_START
   
-  jmp BasicSpriteTest
-  ;jmp LineTest
+  ;jmp BasicSpriteTest
+  jmp LineTest
   ;jmp ClockTest
   ;jmp SinTest
   
@@ -68,6 +67,11 @@ SetupRasterIRQ
   
   lda #1
   sta VIC_IRQ_CONTROL
+  ;lda #VIC_SPRITE_BORDER_BOTTOM
+  ;sta VIC_RASTER
+  ;lda #$7f
+  ;and VIC_CONTROL_REGISTER_1
+  ;sta VIC_CONTROL_REGISTER_1
 
   rts
 
@@ -88,12 +92,13 @@ LineTest
     +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     
-SPRITE_GAP=5
+SPRITE_GAP=7
     +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
     +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
     +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
   !end
 
+  
   jsr SetupRasterIRQ
   cli
   
@@ -102,6 +107,11 @@ SPRITE_GAP=5
 
 BasicSpriteTest
   +MPX_SET_NUMBER_OF_SPRITES 16
+  +MPX_SET_FLAG 13,Multiplexor.FLAG_X_EXPAND
+  +MPX_SET_FLAG 12,Multiplexor.FLAG_Y_EXPAND
+  +MPX_SET_FLAG 11,Multiplexor.FLAG_MULTICOLOUR
+  +MPX_CLEAR_FLAG 10,Multiplexor.FLAG_ENABLED
+
   !for sprite = 0 to 15
     +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
     +MPX_CLEAR_FLAG sprite,Multiplexor.FLAG_PRIORITY
@@ -119,11 +129,6 @@ BasicSpriteTest
   !for sprite = 0 to 15
     +MPX_SET_MEMORY_POINTER sprite,sprite
   !end
-  
-  +MPX_SET_FLAG 13,Multiplexor.FLAG_X_EXPAND
-  +MPX_SET_FLAG 12,Multiplexor.FLAG_Y_EXPAND
-  +MPX_SET_FLAG 11,Multiplexor.FLAG_MULTICOLOUR
-  +MPX_CLEAR_FLAG 10,Multiplexor.FLAG_ENABLED
   
   jsr SetupRasterIRQ
   cli
@@ -166,11 +171,7 @@ SpriteSetSinWaveYCoordsLoop
   tay
   
   lda SinWave.YCoords,y
-  !if Multiplexor.MPX_USE_STAGING_AREA  {
-    sta Multiplexor.StagingYCoords,x
-  } else {
-    sta Multiplexor.YCoords,x
-  }
+  sta Multiplexor.YCoords,x
 
   inx
   cpx #SinWave.SPRITE_COUNT
@@ -206,43 +207,23 @@ SpriteSetCoordsLoop
   tay
   
   lda CircleYCoords,y
-  !if Multiplexor.MPX_USE_STAGING_AREA  {
-    sta Multiplexor.StagingYCoords,x
-  } else {
-    sta Multiplexor.YCoords,x
-  }
+  sta Multiplexor.YCoords,x
   
   lda CircleXCoordsLSB,y
-  !if Multiplexor.MPX_USE_STAGING_AREA  {
-    sta Multiplexor.StagingXCoords,x
-  } else {
-    sta Multiplexor.XCoords,x
-  }
+  sta Multiplexor.XCoords,x
   
   lda CircleXCoordsMSB,y
   bne XHasMSB
   ; Turn off MSB
-  !if Multiplexor.MPX_USE_STAGING_AREA  {
-    lda Multiplexor.StagingFlags,x
-    and #(255-Multiplexor.FLAG_X_MSB)
-    sta Multiplexor.StagingFlags,x
-  } else {
-    lda Multiplexor.Flags,x
-    and #(255-Multiplexor.FLAG_X_MSB)
-    sta Multiplexor.Flags,x
-  }
+  lda Multiplexor.Flags,x
+  and #(255-Multiplexor.FLAG_X_MSB)
+  sta Multiplexor.Flags,x
   jmp AfterXMSBCheck
 XHasMSB
   ; turn on MSB
-  !if Multiplexor.MPX_USE_STAGING_AREA  {
-    lda Multiplexor.StagingFlags,x
-    ora #Multiplexor.FLAG_X_MSB
-    sta Multiplexor.StagingFlags,x
-  } else {
-    lda Multiplexor.Flags,x
-    ora #Multiplexor.FLAG_X_MSB
-    sta Multiplexor.Flags,x
-  }
+  lda Multiplexor.Flags,x
+  ora #Multiplexor.FLAG_X_MSB
+  sta Multiplexor.Flags,x
 AfterXMSBCheck  
   inx
   cpx #CLOCK_SPRITE_COUNT

@@ -17,7 +17,7 @@ Multiplexor.MAX_VIRTUAL_SPRITES           = 32
 ;Multiplexor.MPX_DEBUG_BORDER          =1
 
 
-Multiplexor.CLOSE_RASTER_SEPARATION                =5
+Multiplexor.CLOSE_RASTER_SEPARATION                =3
 
 Multiplexor.MPX_FLAGS_ALLOWED = Multiplexor.MPX_X_MSB_ALLOWED + Multiplexor.MPX_X_EXPANSION_ALLOWED + Multiplexor.MPX_Y_EXPANSION_ALLOWED + Multiplexor.MPX_MULTICOLOUR_ALLOWED + Multiplexor.MPX_DATA_PRIORITY_ALLOWED + Multiplexor.MPX_ENABLED_ALLOWED
 
@@ -99,7 +99,35 @@ Multiplexor.FLAG_ENABLED        =128
 !Macro MPX_SET_YCOORD sprite,ycoord
   lda #ycoord
   sta Multiplexor.YCoords+sprite
+  +MPX_SET_YCOORD_OVERFLOW sprite
 !end
+
+!Macro MPX_SET_YCOORD_OVERFLOW sprite
+  ldx #VIC_HARDWARE_SPRITE_HEIGHT
+  lda Multiplexor.Flags + sprite
+  and #Multiplexor.FLAG_Y_EXPAND
+  beq +     ; Flag Not Set
+  ldx #VIC_HARDWARE_SPRITE_HEIGHT*2
+  ; Flag Not Set
+  +
+  txa
+  clc
+  adc Multiplexor.YCoords+sprite
+  bcs + ; Overflowed into border
+  cmp #VIC_SPRITE_BORDER_BOTTOM
+  bcc ++ ; no overflow
+  +  
+  lda #VIC_SPRITE_BORDER_BOTTOM
+  ++
+  sta Multiplexor.YCoordsBottom+sprite
+!end
+
+!Macro MPX_SET_YCOORD_OVERFLOW_ALL
+  !For sprite=0 to Multiplexor.MAX_VIRTUAL_SPRITES
+    +MPX_SET_YCOORD_OVERFLOW sprite
+  !end
+!End
+
 
 !macro MPX_SET_MEMORY_POINTER  sprite,pointer
   lda #pointer
@@ -177,7 +205,12 @@ Multiplexor.EntryPoint
   }
 
   ; we are creating the initial sprite list here
+
   jsr Multiplexor.SortSpriteList
+  !if Multiplexor.MPX_DEBUG_BORDER {
+    lda #VIC_COLOUR_BLACK
+    sta VIC_BORDER_COLOUR
+  }
   ;inc VIC_BORDER_COLOUR
   ldy #0
 
@@ -192,7 +225,6 @@ Multiplexor.EntryPoint
   }
   
   ldx #0
-  stx Multiplexor.ReplacementSpriteIndex
 
 Multiplexor.InitialHardwareSpriteLoop
   lda Multiplexor.Colours,y
@@ -228,29 +260,33 @@ Multiplexor.InitialHardwareSpriteLoop
   bne Multiplexor.CheckHardwareIndex
   ldy #0;  Virtual Sprite Index has wrapped around to 0
   sty Multiplexor.CurrentVirtualSpriteIndex
-  ldx #0;
   jmp Multiplexor.InitialSpriteListFinished  
 Multiplexor.CheckHardwareIndex
+  
+  cpx #8
+  beq Multiplexor.InitialSpriteListFinished
   ;at this point the y register points to the virtual sprite index
   ;but not the actual sprite data index - so need to translate it
   +MPX_TRUE_Y_INDEX_TO_Y
-  
-  cpx #8
-  bne Multiplexor.InitialHardwareSpriteLoop
-  ldx #0
+  jmp Multiplexor.InitialHardwareSpriteLoop
 
 Multiplexor.InitialSpriteListFinished
+  ldx #0
   stx Multiplexor.CurrentHardwareSpriteIndex
   stx Multiplexor.ReplacementSpriteIndex
   ; we need to get the first sprite in the list's Y Coordinate
-  ldy Multiplexor.Indexes     ; get the first sprites index
-  lda Multiplexor.YCoords,y   ; and the actual sprites y coord
-  clc
-  adc #VIC_HARDWARE_SPRITE_HEIGHT
-  bcc Multiplexor.InitialRequiredRaster
-Multiplexor.InitialRasterSchedule
-  lda #VIC_SPRITE_BORDER_BOTTOM
-Multiplexor.InitialRequiredRaster
+;  ldy Multiplexor.Indexes     ; get the first sprites index
+;  lda Multiplexor.YCoords,y   ; and the actual sprites y coord
+;  clc
+;  adc #VIC_HARDWARE_SPRITE_HEIGHT
+;  bcc Multiplexor.InitialRequiredRaster
+;Multiplexor.InitialRasterSchedule
+;  lda #VIC_SPRITE_BORDER_BOTTOM
+;Multiplexor.InitialRequiredRaster
+  ldy Multiplexor.Indexes
+  lda Multiplexor.YCoordsBottom,y
+  
+  
   sta VIC_RASTER
   
   lda #$7f   ; turn off raster MSB
@@ -313,34 +349,32 @@ Multiplexor.UpdateSpriteListEntry2
   and #7
   sta Multiplexor.CurrentHardwareSpriteIndex
   
+  ; move to the next replacement sprite
+  inc Multiplexor.ReplacementSpriteIndex
   ; move to next virtual sprite
   inc Multiplexor.CurrentVirtualSpriteIndex
   lda Multiplexor.CurrentVirtualSpriteIndex
   cmp Multiplexor.VirtualSpriteCount
   beq Multiplexor.SpriteUpdateFinished
   ; We still have sprites to process - lets schedule the raster after the current replacement sprite
-  inc Multiplexor.ReplacementSpriteIndex
-  lda Multiplexor.ReplacementSpriteIndex
-  and #7
-  asl
-  tay
-  lda VIC_SPRITE_Y_0,y
-  clc
-  adc #VIC_HARDWARE_SPRITE_HEIGHT
-  bcs Multiplexor.ScheduleRasterAtBottom      ; <==== not sure about this
-  
-  ; close raster check not correct
-  ;  adc #Multiplexor.CLOSE_RASTER_SEPARATION
-  ;  bcs Multiplexor.ScheduleRasterAtBottom
-  ; close raster check not correct
+  ldy Multiplexor.ReplacementSpriteIndex
+  +MPX_TRUE_Y_INDEX_TO_Y
+  lda Multiplexor.YCoordsBottom,y
 
   ; compare the requested raster interrupt with the current raster
+  ; problem - bottom value is same as raster - so it schedules raster as now
+  ; which causes flickering
+  
+  sbc #Multiplexor.CLOSE_RASTER_SEPARATION
   cmp VIC_RASTER
 
   ; the next sprite to display is less than the current raster - so we can just try and display it
-  bcs Multiplexor.RequiredRaster
-  
+  bcc Multiplexor.NotRequiredRaster
+  lda Multiplexor.YCoordsBottom,y
+  jmp Multiplexor.RequiredRaster
+Multiplexor.NotRequiredRaster
   ; the next required sprite raster is <= the current raster so just go back and draw the next sprite
+  ;inc Multiplexor.ReplacementSpriteIndex
   inc VIC_BORDER_COLOUR
   jmp Multiplexor.UpdateSpriteListEntry2
 
@@ -353,15 +387,7 @@ Multiplexor.SpriteUpdateFinished
   ldy Multiplexor.VirtualSpriteCount
   dey
   +MPX_TRUE_Y_INDEX_TO_Y
-  lda Multiplexor.YCoords,y
-  clc
-  adc #VIC_HARDWARE_SPRITE_HEIGHT
-  bcs Multiplexor.ScheduleAtBottom
-  cmp #VIC_SPRITE_BORDER_BOTTOM
-  bcc Multiplexor.EnoughRoom
-Multiplexor.ScheduleAtBottom
-  lda #VIC_SPRITE_BORDER_BOTTOM
-Multiplexor.EnoughRoom
+  lda Multiplexor.YCoordsBottom,y
   ; store the A register as the required raster and schedule the next interrupt to be the initial list again
   sta VIC_RASTER
   +STORE_WORD Multiplexor.EntryPoint,KERNAL_IRQ_SERVICE_ROUTINE
@@ -375,6 +401,7 @@ Multiplexor.ScheduleRasterAtBottom
   
 Multiplexor.RequiredRaster  
   sta VIC_RASTER
+  ;inc Multiplexor.ReplacementSpriteIndex
 
 Multiplexor.AfterRasterStored  
   lda #$7f   ; turn off raster MSB
@@ -419,8 +446,8 @@ Multiplexor.SortCompare
   ; at this point - X hold the 1st element index
   ; y holds the second element index
   
-  lda Multiplexor.YCoords,x             ; A = Ycoord at 1st Element
-  cmp Multiplexor.YCoords,y             ; Compare with YCoord at 2nd element
+  lda Multiplexor.YCoordsBottom,x             ; A = Ycoord at 1st Element
+  cmp Multiplexor.YCoordsBottom,y             ; Compare with YCoord at 2nd element
   beq Multiplexor.PairSorted
   bcc Multiplexor.PairSorted            ; If 1st Ycoord < 2nd YCoord then pair already sorted
   ; Swap the indexes around here
@@ -680,6 +707,8 @@ Multiplexor.Pointers
 Multiplexor.Flags
 !fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
 
+Multiplexor.YCoordsBottom
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
 
 Multiplexor.SortComplete                !byte 0
 
