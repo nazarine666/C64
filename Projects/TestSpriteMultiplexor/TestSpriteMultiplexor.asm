@@ -13,21 +13,79 @@ Multiplexor.MPX_Y_EXPANSION_ALLOWED   =1
 Multiplexor.MPX_MULTICOLOUR_ALLOWED   =1
 Multiplexor.MPX_DATA_PRIORITY_ALLOWED =0
 Multiplexor.MPX_ENABLED_ALLOWED       =0
-Multiplexor.MPX_DEBUG_BORDER          =1
+Multiplexor.MPX_DEBUG_BORDER          =0
 
 
 
-!source "..\..\Libraries\SpriteMulitplexorV2.asm",once
+!source "..\..\Libraries\SpriteMulitplexorV3.asm",once
 
 
 !source "circle.asm",once
 !source "sinwave.asm",once
+SORTTEST
+  +SET_VIC_BANK_2     ; Sets the label VIC_BANK_START
+  
+  +SET_SCREEN_OFFSET 2048   ; sets the label  VIC_SCREEN_START_OFFSET to same value
+  +MPX_SET_NUMBER_OF_SPRITES 9
+  
+  VIC_SCREEN_START=VIC_BANK_START+VIC_SCREEN_START_OFFSET ; the actual address where the screen is located
+  +MPX_INITIATE VIC_SCREEN_START
 
+
+  !for sprite = 0 to 23
+    +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
+    +MPX_SET_MEMORY_POINTER sprite,sprite
+    +MPX_SET_COLOUR sprite,1 +(sprite and 3)
+    ;+MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(12*sprite)
+    ;+MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*10)
+  !end
+  !for sprite = 0 to 7
+    +MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
+    
+SPRITE_GAP=7
+    +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
+    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
+    +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
+  !end
+
+  +MPX_SET_RASTER_HOOK 0,60,SetBorderRed
+  +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
+  +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
+  
+  +MPX_SET_RASTER_HOOK_COUNT 3
+  
+  
+  ; BLACK = INITIATE TIME
+  ; BLUE = SORT TIME
+  ; BROWN = CONSTRUCT TIME
+  ; CYAN = FREE
+  lda #VIC_COLOUR_BLACK
+  sta VIC_BORDER_COLOUR
+  +MPX_INITIATE_SPRITE_INDEXES
+LOOP  
+  +WAIT_FOR_RASTER 50
+  lda #VIC_COLOUR_BLUE
+  sta VIC_BORDER_COLOUR
+  jsr Multiplexor.SortSpriteList
+  lda #VIC_COLOUR_BROWN
+  sta VIC_BORDER_COLOUR
+  jsr Multiplexor.ConstructDrawList
+  lda #VIC_COLOUR_CYAN
+  sta VIC_BORDER_COLOUR
+  jmp LOOP
+  rts
+StartRaster !byte 0
+MidRaster !byte 0
+EndRaster   !byte 0
 +EMPTY_IRQ_ROUTINE
 
 startofprogram
   lda #VIC_COLOUR_BLACK
   sta VIC_BORDER_COLOUR
+  jmp SORTTEST
+  
   +MACHINE_INIT
   lda #VIC_CONTROL_REGISTER_1_DEFAULT
   sta VIC_CONTROL_REGISTER_1
@@ -98,6 +156,11 @@ SPRITE_GAP=7
     +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
   !end
 
+  +MPX_SET_RASTER_HOOK 0,60,SetBorderRed
+  +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
+  +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
+  
+  +MPX_SET_RASTER_HOOK_COUNT 3
   
   jsr SetupRasterIRQ
   cli
@@ -238,7 +301,22 @@ SpriteAdvanceIndexesLoop
   cpx CLOCK_SPRITE_COUNT
   bne SpriteAdvanceIndexesLoop
   rts
+
+SetBorderRed
+  lda #VIC_COLOUR_RED
+  sta VIC_BORDER_COLOUR
+  rts
   
+SetBorderWhite
+  lda #VIC_COLOUR_WHITE
+  sta VIC_BORDER_COLOUR
+  rts
+
+SetBorderBlue
+  lda #VIC_COLOUR_BLUE
+  sta VIC_BORDER_COLOUR
+  rts
+
 SPRITE_DEFINITION_START=$8000
 *=SPRITE_DEFINITION_START
 !media "NumberSprites.spriteproject", sprite,0,24
