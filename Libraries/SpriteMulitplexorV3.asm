@@ -39,6 +39,9 @@ Multiplexor.CLOSE_RASTER_SEPARATION                =3
   sta Multiplexor.VirtualSpriteCount
   lda #0
   sta Multiplexor.CurrentVirtualSpriteIndex
+  clc
+  adc Multiplexor.RasterHookCount
+  sta Multiplexor.DrawCount
 
 !end
 
@@ -61,14 +64,9 @@ Multiplexor.CLOSE_RASTER_SEPARATION                =3
 
 !macro MPX_INITIATE screen_address
   lda #<(screen_address+VIC_SPRITE_MEMORY_POINTER_OFFSET)
-  ;sta Multiplexor.StoreScreenPointerInitial+1
+  sta Multiplexor.StoreScreenPointer+1
   lda #>(screen_address+VIC_SPRITE_MEMORY_POINTER_OFFSET)
-  ;sta Multiplexor.StoreScreenPointerInitial+2
-
-  lda #<(screen_address+VIC_SPRITE_MEMORY_POINTER_OFFSET)
-  ;sta Multiplexor.StoreScreenPointerUpdate+1
-  lda #>(screen_address+VIC_SPRITE_MEMORY_POINTER_OFFSET)
-  ;sta Multiplexor.StoreScreenPointerUpdate+2
+  sta Multiplexor.StoreScreenPointer+2
   
   +MPX_INITIATE_SPRITE_INDEXES
 !end
@@ -154,6 +152,9 @@ Multiplexor.CLOSE_RASTER_SEPARATION                =3
 !macro MPX_SET_RASTER_HOOK_COUNT rasterCount
   lda #rasterCount
   sta Multiplexor.RasterHookCount
+  clc
+  adc Multiplexor.VirtualSpriteCount
+  sta Multiplexor.DrawCount
 !end
 
 !macro MPX_SET_RASTER_HOOK rasterIndex,rasterLine,hookAddress
@@ -181,18 +182,18 @@ Multiplexor.CLOSE_RASTER_SEPARATION                =3
 
 ; SpriteTable
 ;             Y Coordinate    Expand    SafeToDelete
-; VS 00       100             N         121
-; VS 01       110             N         131
-; VS 02       120             N         141
-; VS 03       130             N         151
-; VS 04       140             N         161
-; VS 05       150             N         171
-; VS 06       160             Y         202
-; VS 07       170             N         191
-; VS 08       180             N         201
-; VS 09       190             N         211
-; VS 10       200             N         221
-; VS 11       210             N         231
+; SPR 00       100             N         121
+; SPR 01       110             N         131
+; SPR 02       120             N         141
+; SPR 03       130             N         151
+; SPR 04       140             N         161
+; SPR 05       150             N         171
+; SPR 06       160             Y         202
+; SPR 07       170             N         191
+; SPR 08       180             N         201
+; SPR 09       190             N         211
+; SPR 10       200             N         221
+; SPR 11       210             N         231
 
 ; Custom      DrawRaster
 ; CR 00       135
@@ -201,37 +202,37 @@ Multiplexor.CLOSE_RASTER_SEPARATION                =3
 
 ; SortedSpriteTable
 ;; Sorted By Safe Deletion
-; Index       Virtusl Sprite  Hardware Sprite   DrawingSprite
-; 00          VS 00           0                 VS06    (08)
-; 01          VS 01           1                 VS09    (09)
-; 02          VS 02           2                 VS10    (10)
-; 03          VS 03           3                 VS11    (11)
-; 04          VS 04           4                 VS00    (00)
-; 05          VS 05           5                 VS01    (01)
-; 06          VS 07           6                 VS02    (02)
-; 07          VS 08           7                 VS03    (03)
-; 08          VS 06           0                 VS04    (04)
-; 09          VS 09           1                 VS05    (05)
-; 10          VS 10           2                 VS07    (06)
-; 11          VS 11           3                 VS08    (07)
+; Index           Sprite        Index + 8   Drawing Sprite
+; IDX 00          SPR 00           IDX 08   SPR 06
+; IDX 01          SPR 01           IDX 09   SPR 09
+; IDX 02          SPR 02           IDX 10   SPR 10
+; IDX 03          SPR 03           IDX 11   SPR 11
+; IDX 04          SPR 04           IDX 00   SPR 00     
+; IDX 05          SPR 05           IDX 01   SPR 01
+; IDX 06          SPR 07           IDX 02   SPR 02
+; IDX 07          SPR 08           IDX 03   SPR 03
+; IDX 08          SPR 06           IDX 04   SPR 04
+; IDX 09          SPR 09           IDX 05   SPR 05
+; IDX 10          SPR 10           IDX 06   SPR 07
+; IDX 11          SPR 11           IDX 07   SPR 08
 
 
 ; Drawing Table   What      When        Hardware Sprite
-; 00              VS06      121         0
-; 01              VS09      131         1
-; 03              CR80      135
-; 04              VS10      141         2
-; 05              VS11      151         3
-; 06              VS00      161         4
-; 07              CR81      165
-; 08              VS01      171         5
-; 09              CR82      185
-; 10              VS02      191         6
-; 11              VS03      201         7
-; 12              VS04      202         0
-; 13              VS05      211         1
-; 14              VS07      221         2
-; 15              VS08      231         3
+; 00              SPR 06    121         0
+; 01              SPR 09    131         1
+; 03              CR 80     135
+; 04              SPR 10    141         2
+; 05              SPR 11    151         3
+; 06              SPR 00    161         4
+; 07              CR 81     165
+; 08              SPR 01    171         5
+; 09              CR 82     185
+; 10              SPR 02    191         6
+; 11              SPR 03    201         7
+; 12              SPR 04    202         0
+; 13              SPR 05    211         1
+; 14              SPR 07    221         2
+; 15              SPR 08    231         3
 
 
 ; Calculate SafeDeletion during sprite addition
@@ -318,6 +319,8 @@ Multiplexor.VirtualSpriteCount           !byte Multiplexor.MAX_VIRTUAL_SPRITES
 
 ; The next virtual sprite to try and display
 Multiplexor.CurrentVirtualSpriteIndex    !byte 0
+; The next hardware sprite to use
+Multiplexor.CurrentHardwareSpriteIndex    !byte 0
 
 ; The index into the actual sprite data
 Multiplexor.SpriteIndexes
@@ -347,6 +350,9 @@ Multiplexor.Pointers
 Multiplexor.Flags
 !fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
 
+; The actual sprite (direct index) to draw when this "SafeToDelete" raster is triggered
+Multiplexor.DrawingSprite
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -371,7 +377,9 @@ Multiplexor.RasterHooAddressMSB
 ;; Main Variables (Both)
 ;;
 Multiplexor.CurrentDrawIndex          !byte 0
-Multiplexor.CurrentDrawCount          !byte 0
+Multiplexor.DrawCount                 !byte 0
+Multiplexor.DrawTableWhen
+!fill Multiplexor.MAX_VIRTUAL_SPRITES+Multiplexor.MAX_RASTER_HOOKS,$0
 Multiplexor.DrawTableWhat
 !fill Multiplexor.MAX_VIRTUAL_SPRITES+Multiplexor.MAX_RASTER_HOOKS,$0
 
@@ -381,7 +389,75 @@ Multiplexor.DrawTableWhat
 ;; Main IRQ Entry Point
 ;;
 Multiplexor.EntryPoint
-  rts
+  +PUSH_REGISTERS_ON_STACK
+  ; $0973
+  ldy Multiplexor.CurrentDrawIndex
+  lda Multiplexor.DrawTableWhat,y
+  bpl Multiplexor.DrawHardwareSprite
+  ; If here we have to execute a custom hook, specified by the index in the A register (and #$7f)
+  and #$7f
+  tax
+  lda Multiplexor.RasterHooAddressLSB,x
+  sta Multiplexor.CallRasterHook+1
+  lda Multiplexor.RasterHooAddressMSB,x
+  sta Multiplexor.CallRasterHook+2
+Multiplexor.CallRasterHook
+  jsr $FFFF
+  jmp Multiplexor.EndDrawHook
+Multiplexor.DrawHardwareSprite
+  ; A register holds the sprite table index
+  tay
+  ldx Multiplexor.CurrentHardwareSpriteIndex
+
+  ; X holds the hardware sprite to use
+  ; y holds the sprite table index
+  lda Multiplexor.Colours,y
+  sta VIC_SPRITE_COLOUR_0,x
+  lda Multiplexor.Pointers,y
+Multiplexor.StoreScreenPointer ; The address gets overwritten during the MPX_INIT macro
+  sta $ffff,x
+  
+  ; Multiply X by 2 as X/Y hardware coordinates are stored in pairs, not sequentially
+  txa
+  asl
+  tax
+  
+  ; X/Y coordinates
+  lda Multiplexor.XCoords,y
+  sta VIC_SPRITE_X_0,x
+  lda Multiplexor.YCoords,y
+  sta VIC_SPRITE_Y_0,x
+  
+  
+
+Multiplexor.EndDrawSprite
+  inc Multiplexor.CurrentHardwareSpriteIndex
+  lda Multiplexor.CurrentHardwareSpriteIndex
+  and #7
+  sta Multiplexor.CurrentHardwareSpriteIndex
+Multiplexor.EndDrawHook
+  inc Multiplexor.CurrentDrawIndex
+  lda Multiplexor.CurrentDrawIndex
+  cmp Multiplexor.DrawCount
+  bne Multiplexor.ScheduleNextRaster
+  lda #0
+  sta Multiplexor.CurrentDrawIndex
+  ;jsr Multiplexor.SortSpriteList
+  ;jsr Multiplexor.CalculateSpriteToDraw
+  ;jsr Multiplexor.ConstructDrawList
+Multiplexor.ScheduleNextRaster
+  ; a register holds the new draw index
+  tay
+  lda Multiplexor.DrawTableWhen,y
+  sta VIC_RASTER
+  lda #$7f
+  and VIC_CONTROL_REGISTER_1
+  sta VIC_CONTROL_REGISTER_1
+  
+  +ACK_RASTER_IRQ  
+
+  +POP_REGISTERS_OFF_STACK
+  rti
 
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
@@ -407,10 +483,6 @@ Multiplexor.SortCompare
   ; at this point - X hold the 1st element index
   ; y holds the second element index
   
-;  lda Multiplexor.SafeToDelete,x             ; A = Ycoord at 1st Element
-;  cmp Multiplexor.SafeToDelete,y             ; Compare with YCoord at 2nd element
-;  beq Multiplexor.PairSorted
-;  bcc Multiplexor.PairSorted            ; If 1st Ycoord < 2nd YCoord then pair already sorted
   lda Multiplexor.SafeToDelete,y
   cmp Multiplexor.SafeToDelete,x
   bcs Multiplexor.PairSorted
@@ -435,7 +507,33 @@ Multiplexor.PairSorted
   beq Multiplexor.SortLoop
   ; sort has finished
   rts
-  
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;;
+;; Calculate Sprite To Draw
+;;
+Multiplexor.CalculateSpriteToDraw
+  ldy #0        ; the draw table index
+  sty Multiplexor.CurrentVirtualSpriteIndex
+  ldx #8        ; The virtual drawing sprite we actually draw at this raster (8 after current one)
+Multiplexor.CalculateSpriteToDrawLoop
+  ; get the virtual sprite index of the drawing sprite
+  ldy Multiplexor.SpriteIndexes,x
+  tya
+  ldy Multiplexor.CurrentVirtualSpriteIndex
+  ; store the actual drawing sprite index for this virtual sprite
+  sta Multiplexor.DrawingSprite,y
+  inx
+  cpx Multiplexor.VirtualSpriteCount
+  bne Multiplexor.DrawSpriteXNotWrapped
+  ldx #0
+Multiplexor.DrawSpriteXNotWrapped
+  inc Multiplexor.CurrentVirtualSpriteIndex
+  lda Multiplexor.CurrentVirtualSpriteIndex
+  cmp Multiplexor.VirtualSpriteCount
+  bne Multiplexor.CalculateSpriteToDrawLoop
+
+  rts
 ;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
 ;;
 ;; Construct Draw List
@@ -457,6 +555,7 @@ Multiplexor.DrawingSetupRepeat
   beq Multiplexor.SpritesLoadedIntoDrawTable
 
   ; if here there are still sprites (y) and still hooks (x) to add to the draw table
+
   +MPX_TRUE_Y_INDEX_TO_Y
   ; CMP (a - memory) (carry set if memory <= a register)
   ; if hook <= sprite
@@ -467,6 +566,8 @@ Multiplexor.DrawingSetupRepeat
   ; add the hook to the draw table and increment the hook
 Multiplexor.AddHookToDrawTable
   ldy Multiplexor.CurrentDrawIndex
+  lda Multiplexor.RasterHookWhen,x
+  sta Multiplexor.DrawTableWhen,y
   txa
   ora #$80
   sta Multiplexor.DrawTableWhat,y
@@ -476,7 +577,11 @@ Multiplexor.AddHookToDrawTable
 
 Multiplexor.AddSpriteToDrawTable
   ; add sprite to the draw table and increment the sprite
-  lda Multiplexor.CurrentVirtualSpriteIndex
+  ; a register holds the SafeToDelete flag for the sprite
+  ldy Multiplexor.CurrentDrawIndex
+  sta Multiplexor.DrawTableWhen,y
+  ldy Multiplexor.CurrentVirtualSpriteIndex
+  lda Multiplexor.DrawingSprite,y
   ldy Multiplexor.CurrentDrawIndex
   sta Multiplexor.DrawTableWhat,y
   inc Multiplexor.CurrentVirtualSpriteIndex
@@ -495,6 +600,8 @@ Multiplexor.HooksLoadedIntoDrawTable
   ldy Multiplexor.CurrentVirtualSpriteIndex
   cpy Multiplexor.VirtualSpriteCount
   beq Multiplexor.DrawTableConstructed
+  +MPX_TRUE_Y_INDEX_TO_Y
+  lda Multiplexor.SafeToDelete,y
   jmp Multiplexor.AddSpriteToDrawTable
   
 Multiplexor.DrawTableConstructed

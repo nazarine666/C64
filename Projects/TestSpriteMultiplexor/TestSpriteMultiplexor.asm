@@ -26,30 +26,29 @@ SORTTEST
   +SET_VIC_BANK_2     ; Sets the label VIC_BANK_START
   
   +SET_SCREEN_OFFSET 2048   ; sets the label  VIC_SCREEN_START_OFFSET to same value
-  +MPX_SET_NUMBER_OF_SPRITES 9
+  +MPX_SET_NUMBER_OF_SPRITES 12
   
   VIC_SCREEN_START=VIC_BANK_START+VIC_SCREEN_START_OFFSET ; the actual address where the screen is located
   +MPX_INITIATE VIC_SCREEN_START
 
 
-  !for sprite = 0 to 23
+  !for sprite = 0 to 11
     +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
     +MPX_SET_MEMORY_POINTER sprite,sprite
     +MPX_SET_COLOUR sprite,1 +(sprite and 3)
     ;+MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(12*sprite)
-    ;+MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*10)
+    +MPX_SET_YCOORD sprite,100+(sprite*10)
   !end
   !for sprite = 0 to 7
     +MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     
-SPRITE_GAP=7
-    +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
-    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
-    +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
   !end
 
+  +MPX_SET_FLAG 6,Multiplexor.FLAG_Y_EXPAND
+  +MPX_SET_ALL_SAFE_DELETE_RASTERS
+  
   +MPX_SET_RASTER_HOOK 0,60,SetBorderRed
   +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
   +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
@@ -64,17 +63,19 @@ SPRITE_GAP=7
   lda #VIC_COLOUR_BLACK
   sta VIC_BORDER_COLOUR
   +MPX_INITIATE_SPRITE_INDEXES
-LOOP  
-  +WAIT_FOR_RASTER 50
-  lda #VIC_COLOUR_BLUE
-  sta VIC_BORDER_COLOUR
+  
+;LOOP  
+;  +WAIT_FOR_RASTER 50
+;  lda #VIC_COLOUR_BLUE
+;  sta VIC_BORDER_COLOUR
   jsr Multiplexor.SortSpriteList
+  jsr Multiplexor.CalculateSpriteToDraw
   lda #VIC_COLOUR_BROWN
   sta VIC_BORDER_COLOUR
   jsr Multiplexor.ConstructDrawList
-  lda #VIC_COLOUR_CYAN
-  sta VIC_BORDER_COLOUR
-  jmp LOOP
+;  lda #VIC_COLOUR_CYAN
+;  sta VIC_BORDER_COLOUR
+;  jmp LOOP
   rts
 StartRaster !byte 0
 MidRaster !byte 0
@@ -84,7 +85,6 @@ EndRaster   !byte 0
 startofprogram
   lda #VIC_COLOUR_BLACK
   sta VIC_BORDER_COLOUR
-  jmp SORTTEST
   
   +MACHINE_INIT
   lda #VIC_CONTROL_REGISTER_1_DEFAULT
@@ -114,6 +114,10 @@ startofprogram
 
   +MPX_INITIATE VIC_SCREEN_START
   
+  lda #0
+  sta Multiplexor.CurrentDrawIndex
+  sta Multiplexor.CurrentHardwareSpriteIndex
+
   ;jmp BasicSpriteTest
   jmp LineTest
   ;jmp ClockTest
@@ -123,13 +127,15 @@ SetupRasterIRQ
 
   +STORE_WORD Multiplexor.EntryPoint,KERNAL_IRQ_SERVICE_ROUTINE
   
+  lda #0
+  sta Multiplexor.CurrentDrawIndex
   lda #1
   sta VIC_IRQ_CONTROL
-  ;lda #VIC_SPRITE_BORDER_BOTTOM
-  ;sta VIC_RASTER
-  ;lda #$7f
-  ;and VIC_CONTROL_REGISTER_1
-  ;sta VIC_CONTROL_REGISTER_1
+  lda Multiplexor.DrawTableWhen
+  sta VIC_RASTER
+  lda #$7f
+  and VIC_CONTROL_REGISTER_1
+  sta VIC_CONTROL_REGISTER_1
 
   rts
 
@@ -137,30 +143,37 @@ EmptyGameLoop
   jmp EmptyGameLoop
 
 LineTest
-  +MPX_SET_NUMBER_OF_SPRITES 24
+  +MPX_SET_NUMBER_OF_SPRITES 12
   !for sprite = 0 to 23
     +MPX_SET_FLAG sprite,Multiplexor.FLAG_ENABLED
     +MPX_SET_MEMORY_POINTER sprite,sprite
     +MPX_SET_COLOUR sprite,1 +(sprite and 3)
-    ;+MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(12*sprite)
-    ;+MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+(sprite*10)
   !end
   !for sprite = 0 to 7
     +MPX_SET_XCOORD sprite,VIC_SPRITE_BORDER_LEFT+(30*sprite)
     +MPX_SET_XCOORD sprite+8,VIC_SPRITE_BORDER_LEFT+(30*sprite)
-    +MPX_SET_XCOORD sprite+16,VIC_SPRITE_BORDER_LEFT+(30*sprite)
-    
-SPRITE_GAP=7
-    +MPX_SET_YCOORD sprite+8,VIC_SPRITE_BORDER_TOP+(sprite*SPRITE_GAP)
-    +MPX_SET_YCOORD sprite,VIC_SPRITE_BORDER_TOP+70+(sprite*SPRITE_GAP)
-    +MPX_SET_YCOORD sprite+16,VIC_SPRITE_BORDER_TOP+140+(sprite*SPRITE_GAP)
+  !End
+  !for sprite = 0 to 11
+    +MPX_SET_YCOORD sprite,100+(sprite*10)
   !end
 
-  +MPX_SET_RASTER_HOOK 0,60,SetBorderRed
-  +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
-  +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
+  +MPX_SET_FLAG 6,Multiplexor.FLAG_Y_EXPAND
+  
+  +MPX_SET_RASTER_HOOK 0,135,SetBorderRed
+  +MPX_SET_RASTER_HOOK 1,165,SetBorderWhite
+  +MPX_SET_RASTER_HOOK 2,185,SetBorderBlue
   
   +MPX_SET_RASTER_HOOK_COUNT 3
+  
+  
+  +MPX_SET_ALL_SAFE_DELETE_RASTERS
+  
+  nop
+  
+  jsr Multiplexor.SortSpriteList
+  jsr Multiplexor.CalculateSpriteToDraw
+  jsr Multiplexor.ConstructDrawList
+
   
   jsr SetupRasterIRQ
   cli
