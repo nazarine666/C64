@@ -1,5 +1,6 @@
 *=$0801
 !basic startofprogram
+; 66 @ 14:28
 
 !source "..\..\CHIPLabels\VICLabels.asm",once
 !source "..\..\CHIPLabels\CIALabels.asm",once
@@ -17,7 +18,7 @@ Multiplexor.MPX_DEBUG_BORDER          =0
 
 
 
-!source "..\..\Libraries\SpriteMulitplexorV3.asm",once
+!source "..\..\Libraries\SpriteMulitplexorV2.asm",once
 
 
 !source "circle.asm",once
@@ -47,13 +48,13 @@ SORTTEST
   !end
 
   +MPX_SET_FLAG 6,Multiplexor.FLAG_Y_EXPAND
-  +MPX_SET_ALL_SAFE_DELETE_RASTERS
+ ; +MPX_SET_ALL_SAFE_DELETE_RASTERS
   
-  +MPX_SET_RASTER_HOOK 0,60,SetBorderRed
-  +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
-  +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
+ ; +MPX_SET_RASTER_HOOK 0,60,SetBorderRed
+ ; +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
+ ; +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
   
-  +MPX_SET_RASTER_HOOK_COUNT 3
+ ; +MPX_SET_RASTER_HOOK_COUNT 3
   
   
   ; BLACK = INITIATE TIME
@@ -62,17 +63,17 @@ SORTTEST
   ; CYAN = FREE
   lda #VIC_COLOUR_BLACK
   sta VIC_BORDER_COLOUR
-  +MPX_INITIATE_SPRITE_INDEXES
+  ; +MPX_INITIATE_SPRITE_INDEXES
   
 ;LOOP  
 ;  +WAIT_FOR_RASTER 50
 ;  lda #VIC_COLOUR_BLUE
 ;  sta VIC_BORDER_COLOUR
-  jsr Multiplexor.SortSpriteList
-  jsr Multiplexor.CalculateSpriteToDraw
+  ;jsr Multiplexor.SortSpriteList
+  ;jsr Multiplexor.CalculateSpriteToDraw
   lda #VIC_COLOUR_BROWN
   sta VIC_BORDER_COLOUR
-  jsr Multiplexor.ConstructDrawList
+  ;jsr Multiplexor.ConstructDrawList
 ;  lda #VIC_COLOUR_CYAN
 ;  sta VIC_BORDER_COLOUR
 ;  jmp LOOP
@@ -114,8 +115,10 @@ startofprogram
 
   +MPX_INITIATE VIC_SCREEN_START
   
+  lda #VIC_COLOUR_BLACK
+  sta VIC_BORDER_COLOUR
   lda #0
-  sta Multiplexor.CurrentDrawIndex
+  ;sta Multiplexor.CurrentDrawIndex
   sta Multiplexor.CurrentHardwareSpriteIndex
 
   ;jmp BasicSpriteTest
@@ -128,10 +131,11 @@ SetupRasterIRQ
   +STORE_WORD Multiplexor.EntryPoint,KERNAL_IRQ_SERVICE_ROUTINE
   
   lda #0
-  sta Multiplexor.CurrentDrawIndex
+;  sta Multiplexor.CurrentDrawIndex
   lda #1
   sta VIC_IRQ_CONTROL
-  lda Multiplexor.DrawTableWhen
+  ; lda Multiplexor.DrawTableWhen
+  lda #255
   sta VIC_RASTER
   lda #$7f
   and VIC_CONTROL_REGISTER_1
@@ -159,20 +163,20 @@ LineTest
 
   +MPX_SET_FLAG 6,Multiplexor.FLAG_Y_EXPAND
   
-  +MPX_SET_RASTER_HOOK 0,135,SetBorderRed
-  +MPX_SET_RASTER_HOOK 1,165,SetBorderWhite
-  +MPX_SET_RASTER_HOOK 2,185,SetBorderBlue
+  +MPX_SET_RASTER_HOOK 0,75,SetBorderRed
+  +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
+  +MPX_SET_RASTER_HOOK 2,200,SetBorderBlue
   
   +MPX_SET_RASTER_HOOK_COUNT 3
   
   
-  +MPX_SET_ALL_SAFE_DELETE_RASTERS
+;  +MPX_SET_ALL_SAFE_DELETE_RASTERS
   
   nop
   
-  jsr Multiplexor.SortSpriteList
-  jsr Multiplexor.CalculateSpriteToDraw
-  jsr Multiplexor.ConstructDrawList
+;  jsr Multiplexor.SortSpriteList
+;  jsr Multiplexor.CalculateSpriteToDraw
+;  jsr Multiplexor.ConstructDrawList
 
   
   jsr SetupRasterIRQ
