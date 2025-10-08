@@ -14,7 +14,8 @@ Multiplexor.MPX_Y_EXPANSION_ALLOWED   =1
 Multiplexor.MPX_MULTICOLOUR_ALLOWED   =1
 Multiplexor.MPX_DATA_PRIORITY_ALLOWED =0
 Multiplexor.MPX_ENABLED_ALLOWED       =0
-Multiplexor.MPX_DEBUG_BORDER          =0
+Multiplexor.MPX_DEBUG_BORDER_INITIAL  =0
+Multiplexor.MPX_DEBUG_BORDER_UPDATE   =0
 
 
 
@@ -23,7 +24,6 @@ Multiplexor.MPX_DEBUG_BORDER          =0
 
 !source "circle.asm",once
 !source "sinwave.asm",once
-SORTTEST
   +SET_VIC_BANK_2     ; Sets the label VIC_BANK_START
   
   +SET_SCREEN_OFFSET 2048   ; sets the label  VIC_SCREEN_START_OFFSET to same value
@@ -78,9 +78,6 @@ SORTTEST
 ;  sta VIC_BORDER_COLOUR
 ;  jmp LOOP
   rts
-StartRaster !byte 0
-MidRaster !byte 0
-EndRaster   !byte 0
 +EMPTY_IRQ_ROUTINE
 
 startofprogram
@@ -165,9 +162,13 @@ LineTest
   
   +MPX_SET_RASTER_HOOK 0,75,SetBorderRed
   +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
-  +MPX_SET_RASTER_HOOK 2,200,SetBorderBlue
+  +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
+  +MPX_SET_RASTER_HOOK 3,150,SetBorderGreen
+  +MPX_SET_RASTER_HOOK 4,175,SetBorderCyan
+  +MPX_SET_RASTER_HOOK 5,VIC_SPRITE_BORDER_BOTTOM-4,SetBorderYellow
+  +MPX_SET_RASTER_HOOK 6,VIC_SPRITE_BORDER_BOTTOM+4,SetBorderPurple
   
-  +MPX_SET_RASTER_HOOK_COUNT 3
+  +MPX_SET_RASTER_HOOK_COUNT 7
   
   
 ;  +MPX_SET_ALL_SAFE_DELETE_RASTERS
@@ -331,6 +332,26 @@ SetBorderWhite
 
 SetBorderBlue
   lda #VIC_COLOUR_BLUE
+  sta VIC_BORDER_COLOUR
+  rts
+
+SetBorderGreen
+  lda #VIC_COLOUR_GREEN
+  sta VIC_BORDER_COLOUR
+  rts
+
+SetBorderCyan
+  lda #VIC_COLOUR_CYAN
+  sta VIC_BORDER_COLOUR
+  rts
+
+SetBorderPurple
+  lda #VIC_COLOUR_PURPLE
+  sta VIC_BORDER_COLOUR
+  rts
+
+SetBorderYellow
+  lda #VIC_COLOUR_YELLOW
   sta VIC_BORDER_COLOUR
   rts
 
