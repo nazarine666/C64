@@ -220,25 +220,20 @@ Multiplexor.FLAG_ENABLED        =128
 Multiplexor.EntryPoint
   ; 835
   +PUSH_REGISTERS_ON_STACK
-
-  ldx #0
-  stx Multiplexor.CurrentRasterHook
-  
-  !if Multiplexor.MPX_DEBUG_BORDER_INITIAL {
-    lda #VIC_COLOUR_GREY
-    sta VIC_BORDER_COLOUR
-  }
-
-  ; we are creating the initial sprite list here
-
   !if Multiplexor.MPX_DEBUG_BORDER_INITIAL {
     inc VIC_BORDER_COLOUR
   }
 
-  jsr Multiplexor.SortSpriteList
-  !if Multiplexor.MPX_DEBUG_BORDER_INITIAL {
-    dec VIC_BORDER_COLOUR
-  }
+  ; this entry is after the last raster of the frame
+
+  ldx #0
+  stx Multiplexor.CurrentRasterHook
+  
+
+  ; we are creating the initial sprite list here
+
+
+  ;jsr Multiplexor.SortSpriteList
   ldy #0
   ;;;;  =>>>>> sty Multiplexor.CurrentRasterHook
   sty Multiplexor.RasterHookFinishOff
@@ -314,47 +309,56 @@ Multiplexor.InitialSpriteListFinished
   stx Multiplexor.ReplacementSpriteIndex
   ; we need to get the first sprite in the list's Y Coordinate
   ldy Multiplexor.Indexes
+  +MPX_TRUE_Y_INDEX_TO_Y
   lda Multiplexor.YCoordsBottom,y
   ;
 
 !if RASTER_CALLOUT_INITIAL {
   ; ================================
-  ; clear any hooks that may have passed during the initial sprite placement
-  pha
-  jsr Multiplexor.CheckForPendingHooks
-  pla
+  ; At this point the previous frame has completed all it's sprites
+  ; any remaining rasters before the current hook need to be cleared
+  ; any hooks after that need to be executed
+  ; flagging the hook irq to continue until no hooks remaining
+  ; and then just use the requested hook
+  
+  ; got this wrong
+  ; the raster will be near the bottom of the screen possibly wrapping around to the next
+  ; frame (if > last sprites bottom it is still previous screen)
+  ;
+  ; need to schedule the next raster - this will either be bottom of
+  ; first sprite (currently in A)
+  ; or the first hook raster - whichever comes first
+  ; if no hook we don't need to call the hook irq
+  ; if hook - we need to call the hook irq with updatespritelist as the "original"
+  ; irq
+  sta Multiplexor.RasterHookOriginalLine
+  ; im still in the previous frame - so there should be no pending hooks
+  ;jsr Multiplexor.CheckForPendingHooks
+  
   ; Checking if raster hooks need calling first
   ldx Multiplexor.CurrentRasterHook
   cpx Multiplexor.RasterHookCount
   beq Multiplexor.InitialNoRasterHook
 
+  ; if here there are hooks still left to schedule
   ; cmp A - memory
   ; Requested Hook - Raster Hook
-  cmp Multiplexor.RasterHookLine,x
-  ; CC if Requested Raster < Next Raster Hook
-  ; CS if Next Raster Hook <= Requested Raster
-  
-  
-  bcs Multiplexor.RasterHookInitialNeeded
-  ;beq Multiplexor.RasterHookInitialNeeded
-  jmp Multiplexor.InitialNoRasterHook
-
-Multiplexor.RasterHookInitialNeeded
-
-  ; Hook Raster <= Original Raster - so display the hook
-  ; store the original requested raster first
-  sta Multiplexor.RasterHookOriginalLine
   lda #<Multiplexor.UpdateSpriteList
   sta Multiplexor.RasterHookOriginalIRQLSB
   lda #>Multiplexor.UpdateSpriteList
   sta Multiplexor.RasterHookOriginalIRQMSB
   
-  ; This is the hooks required raster
   lda Multiplexor.RasterHookLine,x
   sta VIC_RASTER
+  
   lda #$7f
   and VIC_CONTROL_REGISTER_1
   sta VIC_CONTROL_REGISTER_1
+  
+  lda #0
+  sta Multiplexor.RasterHookFinishOff
+
+
   +STORE_WORD Multiplexor.RasterHookIRQRoutine, KERNAL_IRQ_SERVICE_ROUTINE
   +ACK_RASTER_IRQ  
 
@@ -364,7 +368,7 @@ Multiplexor.RasterHookInitialNeeded
 
   +POP_REGISTERS_OFF_STACK
   rti
-  
+
   
 Multiplexor.InitialNoRasterHook
   ; After Hook Checks
@@ -493,29 +497,18 @@ Multiplexor.SpriteUpdateFinished
   ; and also trigger the hook routine to just finish off the hook list
   ;
   
-  pha
-  jsr Multiplexor.CheckForPendingHooks
-  pla
+  ; pha
+  ; jsr Multiplexor.CheckForPendingHooks
+  ; pla
   ldx Multiplexor.CurrentRasterHook
   cpx Multiplexor.RasterHookCount
   beq Multiplexor.UpdateNoRasterHook
 
-  ; cmp A - memory
-  ; Requested Hook - Raster Hook
-  cmp Multiplexor.RasterHookLine,x
-  ; CC if Requested Raster < Next Raster Hook
-  ; CS if Next Raster Hook <= Requested Raster
+  ; if we are here we have finished drawing all the sprites
+  ; and we still have raster hooks - so we need to execute the raster hook
+  ; callout with follow on raster as EntryPoint and the flag set to indicate
+  ; to finish off any remaining hooks
   
-  
-  bcs Multiplexor.RasterHookUpdateNeeded
-  ;beq Multiplexor.RasterHookInitialNeeded
-  
-  ; if here, the last requested sprite raster is < the next hook raster and there are hook rasters
-  ; still to process
-  jmp Multiplexor.UpdateNoRasterHook
-Multiplexor.RasterHookUpdateNeeded  
-  jmp Multiplexor.UpdateNoRasterHook
-  ; If here we need to schedule the raster hook IRQ
   sta Multiplexor.RasterHookOriginalLine
   lda #<Multiplexor.EntryPoint
   sta Multiplexor.RasterHookOriginalIRQLSB
@@ -527,6 +520,9 @@ Multiplexor.RasterHookUpdateNeeded
   lda #$7f
   and VIC_CONTROL_REGISTER_1
   sta VIC_CONTROL_REGISTER_1
+  lda #1
+  sta Multiplexor.RasterHookFinishOff
+  
   +STORE_WORD Multiplexor.RasterHookIRQRoutine, KERNAL_IRQ_SERVICE_ROUTINE
   +ACK_RASTER_IRQ  
   +POP_REGISTERS_OFF_STACK
@@ -926,6 +922,28 @@ Multiplexor.RasterHookNormalLink
   
 Multiplexor.NoMoreRasterHooks
   ; Restore the original raster requested
+  ; if we were in "finish off" mode
+  ; we don't want to schedule the next raster - we just need
+  ; to call the original routine after ensuring
+  ; we have popped anything off the stack we need to
+  ; the original routine will handle the necessary RTI
+  
+  lda Multiplexor.RasterHookFinishOff
+  beq Multiplexor.NoMoreRasterHooksNotFinishingOff  
+  ; here we have finished all the hooks - and we were in finishing mode
+  ; finishing mode - so we need to call the 
+  lda Multiplexor.RasterHookOriginalIRQLSB
+  sta Multiplexor.NoMoreRasterHooksJMP+1
+  lda Multiplexor.RasterHookOriginalIRQMSB
+  sta Multiplexor.NoMoreRasterHooksJMP+2
+  +POP_REGISTERS_OFF_STACK
+Multiplexor.NoMoreRasterHooksJMP
+  jmp $ffff
+  
+
+Multiplexor.NoMoreRasterHooksNotFinishingOff  
+  lda #0
+  sta Multiplexor.RasterHookFinishOff
   lda Multiplexor.RasterHookOriginalIRQLSB
   sta KERNAL_IRQ_SERVICE_ROUTINE+0
   lda Multiplexor.RasterHookOriginalIRQMSB

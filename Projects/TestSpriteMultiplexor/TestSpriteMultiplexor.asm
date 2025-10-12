@@ -175,11 +175,12 @@ LineTest
   
   nop
   
-;  jsr Multiplexor.SortSpriteList
+  jsr Multiplexor.SortSpriteList
 ;  jsr Multiplexor.CalculateSpriteToDraw
 ;  jsr Multiplexor.ConstructDrawList
 
   
+
   jsr SetupRasterIRQ
   cli
   
