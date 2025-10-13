@@ -167,6 +167,7 @@ LineTest
   +MPX_SET_RASTER_HOOK 4,175,SetBorderCyan
   +MPX_SET_RASTER_HOOK 5,VIC_SPRITE_BORDER_BOTTOM-4,SetBorderYellow
   +MPX_SET_RASTER_HOOK 6,VIC_SPRITE_BORDER_BOTTOM+4,SetBorderPurple
+  ;+MPX_SET_RASTER_HOOK 5,180,MirrorCopyTest
   
   +MPX_SET_RASTER_HOOK_COUNT 7
   
@@ -176,6 +177,7 @@ LineTest
   nop
   
   jsr Multiplexor.SortSpriteList
+  +MPX_COPY_SPRITES_FROM_MIRROR
 ;  jsr Multiplexor.CalculateSpriteToDraw
 ;  jsr Multiplexor.ConstructDrawList
 
@@ -186,6 +188,13 @@ LineTest
   
   jmp EmptyGameLoop
 
+MirrorCopyTest
+  lda #VIC_COLOUR_YELLOW
+  sta VIC_BORDER_COLOUR
+  jsr Multiplexor.CopySpriteInfoFromMirror
+  lda #VIC_COLOUR_PURPLE
+  sta VIC_BORDER_COLOUR
+  rts
 
 BasicSpriteTest
   +MPX_SET_NUMBER_OF_SPRITES 16

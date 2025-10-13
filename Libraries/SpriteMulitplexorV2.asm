@@ -22,7 +22,9 @@ RASTER_CALLOUT_UPDATE_SPRITES_MORE          = 1
 ;Multiplexor.MPX_MULTICOLOUR_ALLOWED   =1
 ;Multiplexor.MPX_DATA_PRIORITY_ALLOWED =1
 ;Multiplexor.MPX_ENABLED_ALLOWED       =1
-;Multiplexor.MPX_DEBUG_BORDER_INITIAL   =1
+;Multiplexor.MPX_DEBUG_BORDER_INITIAL  =1
+
+Multiplexor.MPX_USE_MIRROR            =1
 
 
 Multiplexor.CLOSE_RASTER_SEPARATION                =3
@@ -62,6 +64,15 @@ Multiplexor.FLAG_ENABLED        =128
   tax
 !end
 
+!macro MPX_TRUE_Y_INDEX_TO_Y_MIRROR
+  lda Multiplexor.IndexesMirror,y
+  tay
+!end
+!macro MPX_TRUE_Y_INDEX_TO_X_MIRROR
+  lda Multiplexor.IndexesMirror,y
+  tax
+!end
+
 
 !macro MPX_SET_NUMBER_OF_SPRITES spriteCount
   lda #spriteCount
@@ -73,19 +84,39 @@ Multiplexor.FLAG_ENABLED        =128
 
 !macro MPX_SET_FLAGS sprite,mask    
   lda #mask
-  sta Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.FlagsMirror+sprite
+  } else {
+    sta Multiplexor.Flags+sprite
+  }
 !end
 
 !macro MPX_SET_FLAG sprite,flag
-  lda Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    lda Multiplexor.FlagsMirror+sprite
+  } else {
+    lda Multiplexor.Flags+sprite
+  }
   ora #flag
-  sta Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.FlagsMirror+sprite
+  } else {
+    sta Multiplexor.Flags+sprite
+  }
 !end
 
 !macro MPX_CLEAR_FLAG sprite,flag
-  lda Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    lda Multiplexor.FlagsMirror+sprite
+  } else {
+    lda Multiplexor.Flags+sprite
+  }
   and #(255-flag)
-  sta Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.FlagsMirror+sprite
+  } else {
+    sta Multiplexor.Flags+sprite
+  }
 !end
 
 !macro MPX_INITIATE screen_address
@@ -99,34 +130,58 @@ Multiplexor.FLAG_ENABLED        =128
   lda #>(screen_address+VIC_SPRITE_MEMORY_POINTER_OFFSET)
   sta Multiplexor.StoreScreenPointerUpdate+2
   
-  +MPX_INTIATE_SPRITE_INDEXES
+  +MPX_INITIATE_SPRITE_INDEXES
 !end
 
 !Macro MPX_SET_XCOORD sprite,xcoord
   lda #<xcoord
-  sta Multiplexor.XCoords+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.XCoordsMirror+sprite
   
-  !if xcoord<256 {
-    lda Multiplexor.Flags+sprite
-    and #(255-Multiplexor.FLAG_X_MSB)
-    sta Multiplexor.Flags+sprite
-  }
-  !if xcoord >255 {
-    lda Multiplexor.Flags+sprite
-    ora #Multiplexor.FLAG_X_MSB
-    sta Multiplexor.Flags+sprite
+    !if xcoord<256 {
+      lda Multiplexor.FlagsMirror+sprite
+      and #(255-Multiplexor.FLAG_X_MSB)
+      sta Multiplexor.FlagsMirror+sprite
+    }
+    !if xcoord >255 {
+      lda Multiplexor.FlagsMirror+sprite
+      ora #Multiplexor.FLAG_X_MSB
+      sta Multiplexor.FlagsMirror+sprite
+    }
+  } else {
+    sta Multiplexor.XCoords+sprite
+  
+    !if xcoord<256 {
+      lda Multiplexor.Flags+sprite
+      and #(255-Multiplexor.FLAG_X_MSB)
+      sta Multiplexor.Flags+sprite
+    }
+    !if xcoord >255 {
+      lda Multiplexor.Flags+sprite
+      ora #Multiplexor.FLAG_X_MSB
+      sta Multiplexor.Flags+sprite
+    }
   }
 !end
 
 !Macro MPX_SET_YCOORD sprite,ycoord
   lda #ycoord
-  sta Multiplexor.YCoords+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.YCoordsMirror+sprite
+  } else {
+    sta Multiplexor.YCoords+sprite
+  }
   +MPX_SET_YCOORD_OVERFLOW sprite
 !end
 
 !Macro MPX_SET_YCOORD_OVERFLOW sprite
   ldx #VIC_HARDWARE_SPRITE_HEIGHT
-  lda Multiplexor.Flags + sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    lda Multiplexor.FlagsMirror + sprite
+  } else {
+    lda Multiplexor.Flags + sprite
+  }
+
   and #Multiplexor.FLAG_Y_EXPAND
   beq +     ; Flag Not Set
   ldx #VIC_HARDWARE_SPRITE_HEIGHT*2
@@ -134,14 +189,23 @@ Multiplexor.FLAG_ENABLED        =128
   +
   txa
   clc
-  adc Multiplexor.YCoords+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    adc Multiplexor.YCoordsMirror+sprite
+  } else {
+    adc Multiplexor.YCoords+sprite
+  }
+
   bcs + ; Overflowed into border
   cmp #VIC_SPRITE_BORDER_BOTTOM
   bcc ++ ; no overflow
   +  
   lda #VIC_SPRITE_BORDER_BOTTOM
   ++
-  sta Multiplexor.YCoordsBottom+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.YCoordsBottomMirror+sprite
+  } else {
+    sta Multiplexor.YCoordsBottom+sprite
+  }
 !end
 
 !Macro MPX_SET_YCOORD_OVERFLOW_ALL
@@ -153,24 +217,44 @@ Multiplexor.FLAG_ENABLED        =128
 
 !macro MPX_SET_MEMORY_POINTER  sprite,pointer
   lda #pointer
-  sta Multiplexor.Pointers+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.PointersMirror+sprite
+  } else {
+    sta Multiplexor.Pointers+sprite
+  }
 !end
 
 !Macro MPX_SET_COLOUR sprite,colour
   lda #colour
-  sta Multiplexor.Colours+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    sta Multiplexor.ColoursMirror+sprite
+  } else {
+    sta Multiplexor.Colours+sprite
+  }
 !end
 
 !macro MPX_ENABLE_SPRITE sprite
-  lda Multiplexor.Flags+sprite
-  ora #Multiplexor.FLAG_ENABLED
-  sta Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    lda Multiplexor.FlagsMirror+sprite
+    ora #Multiplexor.FLAG_ENABLED
+    sta Multiplexor.FlagsMirror+sprite
+  } else {
+    lda Multiplexor.Flags+sprite
+    ora #Multiplexor.FLAG_ENABLED
+    sta Multiplexor.Flags+sprite
+  }
 !end
 
 !macro MPX_DISABLE_SPRITE sprite
-  lda Multiplexor.Flags+sprite
-  and #(255-Multiplexor.FLAG_ENABLED)
-  sta Multiplexor.Flags+sprite
+  !if Multiplexor.MPX_USE_MIRROR {
+    lda Multiplexor.FlagsMirror+sprite
+    and #(255-Multiplexor.FLAG_ENABLED)
+    sta Multiplexor.FlagsMirror+sprite
+  } else {
+    lda Multiplexor.Flags+sprite
+    and #(255-Multiplexor.FLAG_ENABLED)
+    sta Multiplexor.Flags+sprite
+  }
 !end
 
 ; Pseudocode
@@ -623,12 +707,17 @@ Multiplexor.UpdateNoRasterHookMore
 
 Multiplexor.SortIndex !byte 0
 
-!macro MPX_INTIATE_SPRITE_INDEXES
+!macro MPX_INITIATE_SPRITE_INDEXES
   !for sprite= 0 to Multiplexor.MAX_VIRTUAL_SPRITES
     lda #sprite
-    sta Multiplexor.Indexes+sprite
+    !if Multiplexor.MPX_USE_MIRROR {
+      sta Multiplexor.IndexesMirror+sprite
+    } else {
+      sta Multiplexor.Indexes+sprite
+    }
   !end
 !end
+
 
 Multiplexor.SortSpriteList
 Multiplexor.SortLoop
@@ -639,6 +728,29 @@ Multiplexor.SortLoop
 Multiplexor.SortCompare
   ldy Multiplexor.SortIndex
   dey
+  
+!if Multiplexor.MPX_USE_MIRROR {
+  +MPX_TRUE_Y_INDEX_TO_X_MIRROR      ; X = Indexes,(y-1)
+  
+  ldy Multiplexor.SortIndex
+  +MPX_TRUE_Y_INDEX_TO_Y_MIRROR      ; Y = Indexes,y
+  
+  ; at this point - X hold the 1st element index
+  ; y holds the second element index
+  
+  lda Multiplexor.YCoordsBottomMirror,x             ; A = Ycoord at 1st Element
+  cmp Multiplexor.YCoordsBottomMirror,y             ; Compare with YCoord at 2nd element
+  beq Multiplexor.PairSorted
+  bcc Multiplexor.PairSorted            ; If 1st Ycoord < 2nd YCoord then pair already sorted
+  ; Swap the indexes around here
+  ldy Multiplexor.SortIndex
+  lda Multiplexor.IndexesMirror,y
+  pha
+  lda Multiplexor.IndexesMirror-1,y
+  sta Multiplexor.IndexesMirror,y
+  pla
+  sta Multiplexor.IndexesMirror-1,y
+} else {
   +MPX_TRUE_Y_INDEX_TO_X      ; X = Indexes,(y-1)
   
   ldy Multiplexor.SortIndex
@@ -659,6 +771,8 @@ Multiplexor.SortCompare
   sta Multiplexor.Indexes,y
   pla
   sta Multiplexor.Indexes-1,y
+}
+
   ; flag as not sorted
   lda #0
   sta Multiplexor.SortComplete
@@ -671,7 +785,6 @@ Multiplexor.PairSorted
   beq Multiplexor.SortLoop
   ; sort has finished
   rts
-  
 
 
 
@@ -995,6 +1108,50 @@ Multiplexor.UpdateSpriteListHookCallout
 Multiplexor.NoMoreHookProcessing
   rts
 
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; This macro copies all the sprite info from the mirror area to the true area
+; this will take ~35 raster lines to complete
+; registers affected: Y
+;
+!Macro MPX_COPY_SPRITES_FROM_MIRROR
+  ldy Multiplexor.VirtualSpriteCount
+-
+  lda Multiplexor.IndexesMirror-1,y
+  sta Multiplexor.Indexes-1,y
+
+  lda Multiplexor.XCoordsMirror-1,y
+  sta Multiplexor.XCoords-1,y
+
+  lda Multiplexor.YCoordsMirror-1,y
+  sta Multiplexor.YCoords-1,y
+
+  lda Multiplexor.ColoursMirror-1,y
+  sta Multiplexor.Colours-1,y
+
+  lda Multiplexor.PointersMirror-1,y
+  sta Multiplexor.Pointers-1,y
+
+  lda Multiplexor.FlagsMirror-1,y
+  sta Multiplexor.Flags-1,y
+
+  lda Multiplexor.YCoordsBottomMirror-1,y
+  sta Multiplexor.YCoordsBottom-1,y
+
+  dey
+  bne -
+!end
+
+;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;;
+;
+; This function copies all the sprite info from the mirror area to the true area
+; this will take ~35 raster lines to complete
+;
+; registers affected: Y
+;
+Multiplexor.CopySpriteInfoFromMirror
+  +MPX_COPY_SPRITES_FROM_MIRROR
+  rts
 
 Multiplexor.VirtualSpriteCount           !byte Multiplexor.MAX_VIRTUAL_SPRITES
 
@@ -1022,6 +1179,7 @@ Multiplexor.Flags
 
 Multiplexor.YCoordsBottom
 !fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
 
 Multiplexor.SortComplete                !byte 0
 
@@ -1061,3 +1219,29 @@ Multiplexor.RasterHookAddressLSB
 !fill  Multiplexor.MAX_RASTER_HOOKS,$00
 Multiplexor.RasterHookAddressMSB
 !fill  Multiplexor.MAX_RASTER_HOOKS,$00
+
+
+
+
+Multiplexor.IndexesMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+Multiplexor.XCoordsMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+Multiplexor.YCoordsMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+Multiplexor.ColoursMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+Multiplexor.PointersMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+Multiplexor.FlagsMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+Multiplexor.YCoordsBottomMirror
+!fill  Multiplexor.MAX_VIRTUAL_SPRITES,$00
+
+
