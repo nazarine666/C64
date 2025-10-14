@@ -18,6 +18,8 @@ Multiplexor.MPX_DEBUG_BORDER_INITIAL  =0
 Multiplexor.MPX_DEBUG_BORDER_UPDATE   =0
 
 
+!source "..\..\Libraries\RasterHooks.asm",once
+
 
 !source "..\..\Libraries\SpriteMulitplexorV2.asm",once
 
@@ -160,16 +162,16 @@ LineTest
 
   +MPX_SET_FLAG 6,Multiplexor.FLAG_Y_EXPAND
   
-  +MPX_SET_RASTER_HOOK 0,75,SetBorderRed
-  +MPX_SET_RASTER_HOOK 1,100,SetBorderWhite
-  +MPX_SET_RASTER_HOOK 2,125,SetBorderBlue
-  +MPX_SET_RASTER_HOOK 3,150,SetBorderGreen
-  +MPX_SET_RASTER_HOOK 4,175,SetBorderCyan
-  +MPX_SET_RASTER_HOOK 5,VIC_SPRITE_BORDER_BOTTOM-4,SetBorderYellow
-  +MPX_SET_RASTER_HOOK 6,VIC_SPRITE_BORDER_BOTTOM+4,SetBorderPurple
-  ;+MPX_SET_RASTER_HOOK 5,180,MirrorCopyTest
+  +RHK_SET_RASTER_HOOK 0,75,SetBorderRed
+  +RHK_SET_RASTER_HOOK 1,100,SetBorderWhite
+  +RHK_SET_RASTER_HOOK 2,125,SetBorderBlue
+  +RHK_SET_RASTER_HOOK 3,150,SetBorderGreen
+  +RHK_SET_RASTER_HOOK 4,175,SetBorderCyan
+  +RHK_SET_RASTER_HOOK 5,VIC_SPRITE_BORDER_BOTTOM-4,SetBorderYellow
+  +RHK_SET_RASTER_HOOK 6,VIC_SPRITE_BORDER_BOTTOM+4,SetBorderPurple
+  ;+RHK_SET_RASTER_HOOK 5,180,MirrorCopyTest
   
-  +MPX_SET_RASTER_HOOK_COUNT 7
+  +RHK_SET_RASTER_HOOK_COUNT 7
   
   
 ;  +MPX_SET_ALL_SAFE_DELETE_RASTERS
