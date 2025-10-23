@@ -12,6 +12,15 @@ CIA_1_DATA_PORT_A           =$DC00
 ; Read: Bit 7: Timer B: Toggle/Impulse output (see register 15 bit 2)
 CIA_1_DATA_PORT_B           =$DC01
 
+; Joystick Macros
+JOYSTICK_UP_MASK      =$1
+JOYSTICK_DOWN_MASK    =$2
+
+JOYSTICK_LEFT_MASK    =$4
+JOYSTICK_RIGHT_MASK   =$8
+JOYSTICK_FIRE_MASK    =$10
+
+
 ; BitX Input-Read Only (0), Output Read/Write (1)
 CIA_1_DATA_DIRECTION_PORT_A =$Dc02
 
