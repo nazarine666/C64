@@ -1,3 +1,8 @@
+
+VIC_BANK_START = 0
+VIC_SCREEN_ADDRESS = 1024
+VIC_SCREEN_START_OFFSET = VIC_SCREEN_ADDRESS-VIC_BANK_START
+
 ; Sprite memory pointers are offset from the current Screen Address - as dictated by the VIC Bank and Memory Configuration (VIC_SPRITE_MEMORY_CONFIG)
 ; Memory addresses $1000-$2000 and $9000-$a000 are always interpreted as Character ROM by the VIC
 VIC_SPRITE_MEMORY_POINTER_OFFSET  =$03f8

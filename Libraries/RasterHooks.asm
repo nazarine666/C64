@@ -19,6 +19,28 @@ RasterHooks.MAX_RASTER_HOOKS                = 10
   sta RasterHooks.RasterHookCount
 !end
 
+!macro RHK_JUST_USE_HOOKS
+  lda #2
+  sta RasterHooks.RasterHookFinishOff
+  lda #<RasterHooks.RasterHookIRQRoutine
+  sta RasterHooks.RasterHookOriginalIRQLSB
+  lda #>RasterHooks.RasterHookIRQRoutine
+  sta RasterHooks.RasterHookOriginalIRQMSB
+!end
+
+!macro RHK_INITIATE_IRQ
+  +STORE_WORD RasterHooks.RasterHookIRQRoutine,KERNAL_IRQ_SERVICE_ROUTINE
+  lda #1
+  sta VIC_IRQ_CONTROL
+  ; lda Multiplexor.DrawTableWhen
+  lda #255
+  sta VIC_RASTER
+  lda #$7f
+  and VIC_CONTROL_REGISTER_1
+  sta VIC_CONTROL_REGISTER_1
+!end
+
+
 RasterHooks.RasterHookIRQRoutine
   +PUSH_REGISTERS_ON_STACK
   
@@ -66,7 +88,9 @@ RasterHooks.NoMoreRasterHooks
   ; the original routine will handle the necessary RTI
   
   lda RasterHooks.RasterHookFinishOff
-  beq RasterHooks.NoMoreRasterHooksNotFinishingOff  
+  beq RasterHooks.NoMoreRasterHooksNotFinishingOff 
+  cmp #2; this means we need to wrap around the raster hook
+  beq RasterHooks.RasterHooksOnlyNoMoreHooks
   ; here we have finished all the hooks - and we were in finishing mode
   ; finishing mode - so we need to call the 
   lda RasterHooks.RasterHookOriginalIRQLSB
@@ -76,6 +100,11 @@ RasterHooks.NoMoreRasterHooks
   +POP_REGISTERS_OFF_STACK
 RasterHooks.NoMoreRasterHooksJMP
   jmp $ffff
+RasterHooks.RasterHooksOnlyNoMoreHooks
+  lda #0
+  sta RasterHooks.CurrentRasterHook
+  lda RasterHooks.RasterHookLine
+  jmp RasterHooks.RasterHookScheduledRaster
   
 
 RasterHooks.NoMoreRasterHooksNotFinishingOff  

@@ -204,7 +204,7 @@
   sta VIC_CONTROL_REGISTER_1
 !end
 
-; Change To Text Mode
+; Change To Text Mode and change Character location
 ; Set the VIC Bank and memory config to the appropriate
 ; settings for the full range memory addresses provided
 ; text_address=0-$ffff
@@ -219,11 +219,9 @@
 ; The VIC Chip sees the character rom at offset $1000
 ; For VIC Bank 1 and 3 ($4000-$7FFF,$C000,$FFFF)
 ; this would be mapped to RAM allowing for custom
-!macro VIC_SET_TEXT_MODE_AND_MEMORY screen_address,chargen_address
+!macro VIC_SET_TEXT_MODE_AND_MEMORY_AND_CHARGEN screen_address,character_address
   VIC_SCREEN_ADDRESS = (screen_address/1024)*1024
-  VIC_SCREEN_START_OFFSET = VIC_SCREEN_ADDRESS-VIC_BANK_START
   VIC_CHARACTER_ADDRESS = (character_address/2048)*2048
-  VIC_CHARACTER_START_OFFSET = VIC_CHARACTER_ADDRESS-VIC_BANK_START
   
   !if ((VIC_SCREEN_ADDRESS/16384)-(VIC_CHARACTER_ADDRESS/16384)) {
     !ERROR "Screen / Character addresses not in same VIC_BANK"
@@ -231,12 +229,48 @@
   
 
   +SET_VIC_BANK (3-(screen_address/16384))
+
+  VIC_SCREEN_START_OFFSET = VIC_SCREEN_ADDRESS-VIC_BANK_START
+  VIC_CHARACTER_START_OFFSET = VIC_CHARACTER_ADDRESS-VIC_BANK_START
+
   VIC_SCREEN_START_OFFSET = VIC_SCREEN_ADDRESS-VIC_BANK_START
 
   lda #((VIC_CHARACTER_START_OFFSET/2048)*2)+((VIC_SCREEN_START_OFFSET/1024)*16)
   sta VIC_MEMORY_CONFIG
+  
+  +VIC_SET_TEXT_MODE
 
 !end
+
+; Change To Text Mode and dont change character location
+; Set the VIC Bank and memory config to the appropriate
+; settings for the full range memory addresses provided
+; text_address=0-$ffff
+; following will be set as a result
+; VIC_BANK_START              ; Where the VIC_BANK start is
+; VIC_SCREEN_ADDRESS          ; same as VIC_COLOUR_ADDRESS
+; VIC_SCREEN_START_OFFSET     ; where in the VIC_BANK the VIC_SCREEN_ADDRESS starts
+;
+; For VIC Bank 0 and 2 ($0000-$3FFF,$8000-$BFFF)
+; The VIC Chip sees the character rom at offset $1000
+; For VIC Bank 1 and 3 ($4000-$7FFF,$C000,$FFFF)
+; this would be mapped to RAM allowing for custom
+!macro VIC_SET_TEXT_MODE_AND_MEMORY screen_address
+  VIC_SCREEN_ADDRESS = (screen_address/1024)*1024
+
+  +SET_VIC_BANK (3-(screen_address/16384))
+
+  VIC_SCREEN_START_OFFSET = VIC_SCREEN_ADDRESS-VIC_BANK_START
+
+  lda VIC_MEMORY_CONFIG
+  and #$0f
+  ora #((VIC_SCREEN_START_OFFSET/1024)*16)
+  sta VIC_MEMORY_CONFIG
+
+  +VIC_SET_TEXT_MODE
+
+!end
+
 
 
 !macro VIC_SPRITE_MEMORY_POINTER_SET  sprite,screen_address,sprite_address

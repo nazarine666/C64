@@ -1,13 +1,21 @@
-bitmap_address = 49152
-colour_address = 49152+8192
+base_address = 32768
+
+bitmap_address = base_address+8192
+colour_address = base_address
+screen_address = base_address+1024
+
+SPRITE_DEFINITION_START=base_address+8192+1024+1024
+
 
 *=bitmap_address
-!binary "e:\nso.bin",8000
+!binary "nso.bin",8000
 
 *=colour_address
-!binary "e:\nso.bin",1000,8000
+!binary "nso.bin",1000,8000
 
-SPRITE_DEFINITION_START=colour_address+1024
+*=screen_address
+!media "testcard.charscreen", char
+
 
 *=SPRITE_DEFINITION_START
 !media "MiscSprites.spriteproject", sprite,0,24
@@ -15,6 +23,8 @@ SPRITE_DEFINITION_START=colour_address+1024
 *=$0801
 !basic startofprogram
 ; 66 @ 14:28
+  nop
+
 
 !source "..\..\CHIPLabels\VICLabels.asm",once
 !source "..\..\CHIPLabels\CIALabels.asm",once
@@ -22,14 +32,21 @@ SPRITE_DEFINITION_START=colour_address+1024
 
 !source "..\..\Macros\Macros.asm",once
 
+!source "..\..\Libraries\RasterHooks.asm",once
 
 
 startofprogram
   +MACHINE_INIT
 
-
+  +RHK_JUST_USE_HOOKS
+  +RHK_SET_RASTER_HOOK_COUNT 2
+  +RHK_SET_RASTER_HOOK 0,VIC_SPRITE_BORDER_TOP+VIC_HARDWARE_SPRITE_HEIGHT*3,ChangeToHiresMode
+  +RHK_SET_RASTER_HOOK 1,100+VIC_SPRITE_BORDER_TOP+VIC_HARDWARE_SPRITE_HEIGHT*3,ChangeToTextMode
+  
   ; HIRES MODE EXAMPLE
   +VIC_SET_HIRES_MODE_AND_MEMORY bitmap_address,colour_address
+  ;+VIC_SET_TEXT_MODE_AND_MEMORY screen_address
+  +VIC_SET_TEXT_MODE_AND_MEMORY_AND_CHARGEN screen_address,base_address+4096
   
   ; Joystick Example
   lda #(1+2+4+8+16)
@@ -63,10 +80,25 @@ startofprogram
   sty VIC_SPRITE_Y_3
   ldy #VIC_SPRITE_BORDER_TOP+VIC_HARDWARE_SPRITE_HEIGHT*1
   sty VIC_SPRITE_Y_4
+
+
+  +RHK_INITIATE_IRQ
+  cli
+  jmp GameLoop
+
+ChangeToHiresMode
+  lda #VIC_COLOUR_BLACK
+  sta VIC_BORDER_COLOUR
+  +VIC_SET_HIRES_MODE_AND_MEMORY bitmap_address,colour_address
+  rts
+ChangeToTextMode
+  lda #VIC_COLOUR_GREEN
+  sta VIC_BORDER_COLOUR
+  +VIC_SET_TEXT_MODE_AND_MEMORY_AND_CHARGEN screen_address,base_address+4096
+  rts
   
 GameLoop
   lda CIA_1_DATA_PORT_B
-  sta VIC_BORDER_COLOUR
   tax
   
   ; LEFT Check
