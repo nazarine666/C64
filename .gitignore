@@ -1,3 +1,6 @@
 *.d64
 *.c64
 *.prg
+testfiles/*
+Projects/*
+studio.xml
